@@ -1,0 +1,57 @@
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Backup files
+*.reg
+*.bak
+*.backup
+*_backup_*
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+*.log
+
+# PowerShell
+*.ps1xml
+
+# IDE files
+.vscode/
+.vs/
+*.suo
+*.user
+*.userprefs
+*.sln.docstates
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Documentation artifacts
+*.pdf
+*.docx
+*.doc
+
+# Personal notes
+notes.txt
+todo.txt
+*.personal
