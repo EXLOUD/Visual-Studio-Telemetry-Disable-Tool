@@ -7,19 +7,6 @@ setlocal enabledelayedexpansion
 
 title Visual Studio Telemetry Disable Launcher
 
-:: Check if running as administrator
-net session >nul 2>&1
-if %errorLevel% == 0 (
-    echo [INFO] Running with administrator privileges...
-) else (
-    echo [ERROR] This script must be run as Administrator!
-    echo.
-    echo Right-click on this batch file and select "Run as administrator"
-    echo.
-    pause
-    exit /b 1
-)
-
 :: Set script directory
 set "SCRIPT_DIR=%~dp0"
 
