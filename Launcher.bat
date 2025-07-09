@@ -2,9 +2,29 @@
 setlocal enabledelayedexpansion
 
 :: ====================================================
+:: Check for admin rights
+:: ====================================================
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
+    echo Requesting elevation...
+    goto UACPrompt
+)
+goto Admin
+
+:UACPrompt
+    echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\getadmin.vbs"
+    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\getadmin.vbs"
+    "%temp%\getadmin.vbs"
+    del "%temp%\getadmin.vbs"
+    exit /B
+
+:Admin
+pushd "%CD%"
+CD /D "%~dp0"
+
+:: ====================================================
 :: PowerShell Script Launcher for VS Telemetry Disable
 :: ====================================================
-
 title Visual Studio Telemetry Disable Launcher
 
 :: Set script directory
@@ -92,12 +112,10 @@ echo.
 
 :confirmation
 set /p "CONFIRM=Do you want to continue? (Y/N): "
-
 if /i "!CONFIRM!"=="y" goto :proceed
 if /i "!CONFIRM!"=="yes" goto :proceed
 if /i "!CONFIRM!"=="n" goto :cancel
 if /i "!CONFIRM!"=="no" goto :cancel
-
 echo Invalid input. Please enter Y or N.
 goto :confirmation
 
@@ -109,7 +127,6 @@ exit /b 0
 
 :proceed
 cls
-
 echo.
 echo [INFO] Launching script on %PS_VERSION% ...
 echo.
