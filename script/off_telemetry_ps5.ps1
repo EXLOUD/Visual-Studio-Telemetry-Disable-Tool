@@ -1,5 +1,3 @@
-﻿#Requires -RunAsAdministrator
-
 <#
 .SYNOPSIS
     Improved comprehensive script to disable telemetry in Microsoft development tools
@@ -46,8 +44,8 @@ $Colors = @{
     Gray = 'Gray'
 }
 
-Write-Host "=====================================-------==========" -ForegroundColor $Colors.Title
-Write-Host "  by EXLOUD aka BOBER" -ForegroundColor $Colors.Title
+Write-Host "======================================================" -ForegroundColor $Colors.Title
+Write-Host "                     by EXLOUD" -ForegroundColor $Colors.Title
 Write-Host "======================================================" -ForegroundColor $Colors.Title
 
 # =======================================================
@@ -567,6 +565,9 @@ Write-Host ".NET CLI" -ForegroundColor $Colors.Success
 Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
 Write-Host "NuGet" -ForegroundColor $Colors.Success
 
+Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
+Write-Host "Settings Synchronization" -ForegroundColor $Colors.Success
+
 # VS Standard Collector Service status
 if ($serviceProcessed) {
     Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
@@ -584,6 +585,142 @@ Write-Host "Customer Experience Improvement Program" -ForegroundColor $Colors.Su
 
 Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
 Write-Host "Telemetry Directories Cleanup" -ForegroundColor $Colors.Success
+
+# =======================================================
+# ADDITIONAL FEATURES AND ENVIRONMENT VARIABLES
+# =======================================================
+Write-Host "`n--- Optional: Additional Features and Environment Variables ---" -ForegroundColor $Colors.Section
+
+Write-Host "This will perform additional configuration:" -ForegroundColor $Colors.Info
+Write-Host "• Disable Visual Studio Settings Synchronization" -ForegroundColor $Colors.Info
+Write-Host "• Disable Live Share" -ForegroundColor $Colors.Info
+Write-Host "• Disable IntelliCode" -ForegroundColor $Colors.Info
+Write-Host "• Disable CodeLens" -ForegroundColor $Colors.Info
+Write-Host "• Set additional environment variables (INTELLICODE_TELEMETRY_OPTOUT, LIVESHARE_TELEMETRY_OPTOUT, VSSDK_TELEMETRY_OPTOUT)" -ForegroundColor $Colors.Info
+
+$enableAdditional = Read-Host "`nEnable additional configuration? (y/n)"
+
+if ($enableAdditional -eq 'y' -or $enableAdditional -eq 'Y' -or $enableAdditional -eq 'yes' -or $enableAdditional -eq 'Yes' -or $enableAdditional -eq 'YES') {
+    
+    # =======================================================
+    # VISUAL STUDIO ADDITIONAL FEATURES DISABLE
+    # =======================================================
+    Write-Host "`n--- Disabling Additional Visual Studio Features ---" -ForegroundColor $Colors.Section
+    
+    if ($installedVersions.Count -gt 0) {
+        foreach ($version in $installedVersions) {
+            $vsName = $vsVersions[$version]
+            Write-Host "`n--- Processing Additional Features for $vsName (version $version) ---" -ForegroundColor $Colors.Info
+            
+            # =======================================================
+            # SETTINGS SYNCHRONIZATION
+            # =======================================================
+            Write-Host "→ Disabling Settings Synchronization..." -ForegroundColor $Colors.Info
+            
+            $settingsPaths = @(
+                "HKCU:\Software\Microsoft\VisualStudio\$version\Settings",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\Settings"
+            )
+            
+            foreach ($path in $settingsPaths) {
+                $null = Set-SafeRegistryValue -Path $path -Name "SyncSettings" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "EnableRoaming" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "EnableSync" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "DisableSync" -Value 1 -Type 'DWORD' -CreatePath
+            }
+            
+            # Additional settings sync paths
+            $syncPath = "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\ConnectedServices"
+            $null = Set-SafeRegistryValue -Path $syncPath -Name "Provider.Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            
+            # =======================================================
+            # LIVE SHARE
+            # =======================================================
+            Write-Host "→ Disabling Live Share..." -ForegroundColor $Colors.Info
+            
+            $liveSharePaths = @(
+                "HKCU:\Software\Microsoft\VisualStudio\$version\LiveShare",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\LiveShare"
+            )
+            
+            foreach ($path in $liveSharePaths) {
+                $null = Set-SafeRegistryValue -Path $path -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "DisableTelemetry" -Value 1 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "OptedIn" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            
+            # Live Share telemetry
+            $liveShareTelemetryPath = "HKCU:\Software\Microsoft\VisualStudio\$version\LiveShare\Telemetry"
+            $null = Set-SafeRegistryValue -Path $liveShareTelemetryPath -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            $null = Set-SafeRegistryValue -Path $liveShareTelemetryPath -Name "OptOut" -Value 1 -Type 'DWORD' -CreatePath
+            
+            # =======================================================
+            # INTELLICODE
+            # =======================================================
+            Write-Host "→ Disabling IntelliCode..." -ForegroundColor $Colors.Info
+            
+            $intelliCodePaths = @(
+                "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliCode",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliSense\IntelliCode",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\IntelliCode"
+            )
+            
+            foreach ($path in $intelliCodePaths) {
+                $null = Set-SafeRegistryValue -Path $path -Name "DisableTelemetry" -Value 1 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "OptedIn" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "ModelDownloadEnabled" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            
+            # IntelliCode privacy settings
+            $intelliCodePrivacyPath = "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliCode\Privacy"
+            $null = Set-SafeRegistryValue -Path $intelliCodePrivacyPath -Name "TelemetryOptOut" -Value 1 -Type 'DWORD' -CreatePath
+            $null = Set-SafeRegistryValue -Path $intelliCodePrivacyPath -Name "DataCollection" -Value 0 -Type 'DWORD' -CreatePath
+            $null = Set-SafeRegistryValue -Path $intelliCodePrivacyPath -Name "UsageDataOptOut" -Value 1 -Type 'DWORD' -CreatePath
+            
+            # =======================================================
+            # CODELENS
+            # =======================================================
+            Write-Host "→ Disabling CodeLens..." -ForegroundColor $Colors.Info
+            
+            $codeLensPaths = @(
+                "HKCU:\Software\Microsoft\VisualStudio\$version\CodeLens",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\TextEditor\CodeLens",
+                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\CodeLens"
+            )
+            
+            foreach ($path in $codeLensPaths) {
+                $null = Set-SafeRegistryValue -Path $path -Name "Disabled" -Value 1 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "ShowAuthorCodeLens" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "ShowReferencesCodeLens" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "ShowTestCodeLens" -Value 0 -Type 'DWORD' -CreatePath
+                $null = Set-SafeRegistryValue -Path $path -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            
+            # CodeLens telemetry
+            $codeLensTelemetryPath = "HKCU:\Software\Microsoft\VisualStudio\$version\CodeLens\Telemetry"
+            $null = Set-SafeRegistryValue -Path $codeLensTelemetryPath -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            $null = Set-SafeRegistryValue -Path $codeLensTelemetryPath -Name "OptOut" -Value 1 -Type 'DWORD' -CreatePath
+        }
+        } else {
+            Write-Host "→ No Visual Studio installations detected, skipping additional features" -ForegroundColor $Colors.Gray
+        }
+        
+        # =======================================================
+        # ADDITIONAL ENVIRONMENT VARIABLES
+        # =======================================================
+        Write-Host "`n--- Setting Additional Environment Variables ---" -ForegroundColor $Colors.Section
+        
+        $null = Set-SafeEnvironmentVariable -Name 'INTELLICODE_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        $null = Set-SafeEnvironmentVariable -Name 'LIVESHARE_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        $null = Set-SafeEnvironmentVariable -Name 'VSSDK_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        
+        Write-Host "`n✓ Additional configuration completed" -ForegroundColor $Colors.Success
+    } else {
+        Write-Host "→ Skipping additional configuration" -ForegroundColor $Colors.Info
+    }
 
 Write-Host "`nLegend:" -ForegroundColor White
 Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success; Write-Host "Action completed successfully"
