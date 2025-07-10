@@ -97,7 +97,7 @@ if !WIN_MAJOR! GEQ 10 (
         set "SCRIPT_BASENAME=off_telemetry_ps5_win7+.ps1"
         set "SCRIPT_TYPE=Windows 7/8/8.1 - PowerShell 5"
     ) else (
-        set "SCRIPT_BASENAME=off_telemetry_ps7_win7+.ps1"
+        set "SCRIPT_BASENAME=off_telemetry_ps7.ps1"
         set "SCRIPT_TYPE=Windows 7/8/8.1 - PowerShell 7"
     )
 )
