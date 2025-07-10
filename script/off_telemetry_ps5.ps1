@@ -525,9 +525,9 @@ if (!(Test-Path "$env:APPDATA\Code")) {
 # =======================================================
 # POWERSHELL TELEMETRY [off] FOR PS 7.x 
 # =======================================================
-# Write-Host "`n--- Disabling PowerShell Telemetry ---" -ForegroundColor $Colors.Section
+ Write-Host "`n--- Disabling PowerShell Telemetry ---" -ForegroundColor $Colors.Section
 
-# $null = Set-SafeEnvironmentVariable -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+ $null = Set-SafeEnvironmentVariable -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
 
 # =======================================================
 # SUMMARY
@@ -577,8 +577,8 @@ if ($serviceProcessed) {
     Write-Host "VS Standard Collector Service (not found)" -ForegroundColor $Colors.Gray
 }
 
-# Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-# Write-Host "PowerShell" -ForegroundColor $Colors.Success
+Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
+Write-Host "PowerShell" -ForegroundColor $Colors.Success
 
 Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
 Write-Host "Customer Experience Improvement Program" -ForegroundColor $Colors.Success
