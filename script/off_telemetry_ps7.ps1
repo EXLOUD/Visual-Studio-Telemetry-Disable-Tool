@@ -7,6 +7,7 @@ using namespace System.Collections.Generic
     This script disables telemetry, crash reporting, and data collection for:
     - Visual Studio 2015-2022 (only if installed)
     - Visual Studio Code (only if installed)
+    - Visual Studio Background Download ( OFF automatic component downloads)
     - .NET CLI
     - NuGet
     - Various Visual Studio services
@@ -21,16 +22,20 @@ using namespace System.Collections.Generic
     Restores registry from backup file
 .PARAMETER BackupPath
     Path for backup file (default: Desktop with timestamp)
+.PARAMETER DisableBackgroundDownload
+    Specifically disable Visual Studio Background Download feature
 .EXAMPLE
     .\off_telemetry_ps7.ps1 -CreateBackup
     .\off_telemetry_ps7.ps1 -RestoreBackup -BackupPath "C:\Backup\registry_backup.reg"
     .\off_telemetry_ps7.ps1 -CreateBackup -BackupPath "C:\MyBackups\telemetry_backup.reg"
+    .\off_telemetry_ps7.ps1 -DisableBackgroundDownload
 #>
 
 param(
     [switch]$CreateBackup,
     [switch]$RestoreBackup,
-    [string]$BackupPath = "$env:USERPROFILE\Desktop\telemetry_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg"
+    [string]$BackupPath = "$env:USERPROFILE\Desktop\telemetry_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg",
+	[switch]$DisableBackgroundDownload
 )
 
 # Color scheme for consistent output
@@ -80,6 +85,8 @@ function New-RegistryBackup {
             "VSUser" = "HKEY_CURRENT_USER\Software\Microsoft\VisualStudio"
             "SQMClient_x64" = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\SQMClient"
             "SQMClient_x86" = "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\SQMClient"
+			"VSSetup_x64" = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\Setup"
+			"VSSetup_x86" = "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
         }
         
         $backupCount = 0
@@ -238,6 +245,110 @@ function Remove-TelemetryDirectory {
         }
     } else {
         Write-Host "→ Telemetry directory not found: $Path" -ForegroundColor $Colors.Gray
+    }
+}
+
+function Disable-BackgroundDownloadTasks {
+    Write-Host "→ Checking for Visual Studio BackgroundDownload scheduled tasks..." -ForegroundColor $Colors.Info
+    
+    try {
+        $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+            $_.TaskName -like "*BackgroundDownload*" -or 
+            ($_.TaskPath -like "*VisualStudio*" -and $_.TaskName -like "*BackgroundDownload*")
+        }
+        
+        if ($tasks) {
+            foreach ($task in $tasks) {
+                Write-Host "→ Found task: $($task.TaskName) at $($task.TaskPath)" -ForegroundColor $Colors.Info
+                
+                if ($task.State -eq "Ready") {
+                    try {
+                        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction Stop
+                        Write-Host "✓ Disabled task: $($task.TaskName)" -ForegroundColor $Colors.Success
+                    }
+                    catch {
+                        Write-Host "✗ Could not disable task $($task.TaskName): $_" -ForegroundColor $Colors.Error
+                    }
+                } else {
+                    Write-Host "✓ Task already disabled: $($task.TaskName)" -ForegroundColor $Colors.Success
+                }
+            }
+            return $true
+        } else {
+            Write-Host "→ No Visual Studio BackgroundDownload tasks found" -ForegroundColor $Colors.Gray
+            return $false
+        }
+    } catch {
+        Write-Host "✗ Error checking scheduled tasks: $_" -ForegroundColor $Colors.Error
+        return $false
+    }
+}
+
+function Stop-BackgroundDownloadProcesses {
+    Write-Host "→ Checking for running BackgroundDownload processes..." -ForegroundColor $Colors.Info
+    
+    try {
+        $processes = Get-Process -Name "BackgroundDownload" -ErrorAction SilentlyContinue
+        if ($processes) {
+            foreach ($process in $processes) {
+                try {
+                    Stop-Process -Id $process.Id -Force -ErrorAction Stop
+                    Write-Host "✓ Stopped process: BackgroundDownload.exe (PID: $($process.Id))" -ForegroundColor $Colors.Success
+                }
+                catch {
+                    Write-Host "✗ Could not stop process PID $($process.Id): $_" -ForegroundColor $Colors.Error
+                }
+            }
+            return $true
+        } else {
+            Write-Host "→ No BackgroundDownload processes currently running" -ForegroundColor $Colors.Gray
+            return $false
+        }
+    } catch {
+        Write-Host "✗ Error checking processes: $_" -ForegroundColor $Colors.Error
+        return $false
+    }
+}
+
+function Remove-BackgroundDownloadTempFolders {
+    Write-Host "→ Cleaning BackgroundDownload temporary folders..." -ForegroundColor $Colors.Info
+    
+    try {
+        $tempPaths = @(
+            "$env:TEMP",
+            "$env:LOCALAPPDATA\Temp"
+        )
+        
+        $foldersRemoved = 0
+        foreach ($tempPath in $tempPaths) {
+            if (Test-Path $tempPath) {
+                $folders = Get-ChildItem -Path $tempPath -Directory -ErrorAction SilentlyContinue | 
+                          Where-Object { $_.Name -match "^[a-zA-Z0-9]{8}\." }
+                
+                foreach ($folder in $folders) {
+                    $bgDownloadPath = Join-Path $folder.FullName "resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service\BackgroundDownload.exe"
+                    if (Test-Path $bgDownloadPath) {
+                        try {
+                            Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
+                            Write-Host "✓ Removed temp folder: $($folder.Name)" -ForegroundColor $Colors.Success
+                            $foldersRemoved++
+                        }
+                        catch {
+                            Write-Host "✗ Could not remove folder $($folder.Name): $_" -ForegroundColor $Colors.Error
+                        }
+                    }
+                }
+            }
+        }
+        
+        if ($foldersRemoved -eq 0) {
+            Write-Host "→ No BackgroundDownload temp folders found" -ForegroundColor $Colors.Gray
+        }
+        
+        return $foldersRemoved -gt 0
+    } catch {
+        Write-Host "✗ Error cleaning temp folders: $_" -ForegroundColor $Colors.Error
+        return $false
     }
 }
 
@@ -588,9 +699,106 @@ if (!(Test-Path "$env:APPDATA\Code")) {
 }
 
 # =======================================================
-# ADDITIONAL POWERSHELL 7 SPECIFIC CHECKS
+# VISUAL STUDIO BACKGROUND DOWNLOAD DISABLE
 # =======================================================
-Write-Host "`n--- PowerShell 7 Specific Checks ---" -ForegroundColor $Colors.Section
+Write-Host "`n--- Disabling Visual Studio Background Download ---" -ForegroundColor $Colors.Section
+
+$backgroundDownloadProcessed = $false
+
+# Check if any Visual Studio versions are installed before proceeding
+if ($installedVersions.Count -gt 0) {
+    Write-Host "→ Visual Studio detected, processing BackgroundDownload settings..." -ForegroundColor $Colors.Info
+    
+    # 1. Disable scheduled tasks
+    $tasksProcessed = Disable-BackgroundDownloadTasks
+    
+    # 2. Set registry keys to disable background downloads
+    Write-Host "→ Setting registry keys to disable background downloads..." -ForegroundColor $Colors.Info
+    
+    $regPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\Setup",
+        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
+    )
+    
+    $regKeysSet = $false
+    foreach ($regPath in $regPaths) {
+        # Check if this registry path should exist (based on architecture)
+        $shouldProcess = $true
+        if ($regPath -like "*Wow6432Node*" -and ![Environment]::Is64BitOperatingSystem) {
+            $shouldProcess = $false
+        }
+        
+        if ($shouldProcess) {
+            # Create the registry path if it doesn't exist (since we're configuring VS Setup)
+            if (!(Test-Path $regPath)) {
+                try {
+                    $null = New-Item -Path $regPath -Force -ErrorAction Stop
+                    Write-Host "→ Created registry path: $regPath" -ForegroundColor $Colors.Info
+                }
+                catch {
+                    Write-Host "✗ Could not create registry path $regPath : $_" -ForegroundColor $Colors.Error
+                    continue
+                }
+            }
+            
+            # Set the registry values
+            $regSettings = @{
+                "BackgroundDownloadDisabled" = 1
+                "DisableBackgroundDownloads" = 1
+                "DisableAutomaticUpdates" = 1
+            }
+            
+            foreach ($setting in $regSettings.GetEnumerator()) {
+                $success = Set-RegistryValue -Path $regPath -Name $setting.Key -Value $setting.Value -Type 'DWord'
+                if ($success) {
+                    $regKeysSet = $true
+                }
+            }
+        }
+    }
+    
+    # 3. Stop running processes
+    $processesProcessed = Stop-BackgroundDownloadProcesses
+    
+    # 4. Clean temporary folders
+    $tempFoldersProcessed = Remove-BackgroundDownloadTempFolders
+    
+    # 5. Verification
+    Write-Host "→ Verifying BackgroundDownload configuration..." -ForegroundColor $Colors.Info
+    
+    try {
+        $verificationSuccess = $false
+        
+        # Check registry settings
+        foreach ($regPath in $regPaths) {
+            if (Test-Path $regPath) {
+                $regValues = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+                if ($regValues -and $regValues.BackgroundDownloadDisabled -eq 1) {
+                    Write-Host "✓ Registry verification: BackgroundDownloadDisabled = 1 in $regPath" -ForegroundColor $Colors.Success
+                    $verificationSuccess = $true
+                }
+            }
+        }
+        
+        if (!$verificationSuccess) {
+            Write-Host "→ Could not verify registry settings" -ForegroundColor $Colors.Warning
+        }
+        
+    } catch {
+        Write-Host "→ Verification error: $_" -ForegroundColor $Colors.Warning
+    }
+    
+    # Set processed flag if any operation was successful
+    $backgroundDownloadProcessed = $tasksProcessed -or $regKeysSet -or $processesProcessed -or $tempFoldersProcessed
+    
+} else {
+    Write-Host "→ No Visual Studio installations detected, skipping BackgroundDownload configuration" -ForegroundColor $Colors.Gray
+}
+
+# =======================================================
+# ADDITIONAL POWERSHELL 7 TELEMETRY CHECKS
+# =======================================================
+Write-Host "`n--- PowerShell 7 Telemetry Checks ---" -ForegroundColor $Colors.Section
 
 # Check if PowerShell telemetry is disabled
 try {
@@ -670,6 +878,17 @@ if ($psTelemetryOptOut -eq '1') {
     Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "PowerShell 7 telemetry " -NoNewline -ForegroundColor $Colors.Info
     Write-Host "(opt-out not configured; current value: $($psTelemetryOptOut ?? 'not set'))" -ForegroundColor $Colors.Gray
+}
+
+# Visual Studio Background Download status
+if ($backgroundDownloadProcessed) {
+    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
+    Write-Host "Visual Studio Background Download " -NoNewline -ForegroundColor $Colors.Info
+    Write-Host "(disabled)" -ForegroundColor $Colors.Success
+} else {
+    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
+    Write-Host "Visual Studio Background Download " -NoNewline -ForegroundColor $Colors.Info
+    Write-Host "(not processed)" -ForegroundColor $Colors.Gray
 }
 
 # Customer Experience Improvement Program status
