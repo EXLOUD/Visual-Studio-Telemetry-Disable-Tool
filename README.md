@@ -2,8 +2,6 @@
 
 # Visual Studio Telemetry Disable Tool
 
----
-
 ### 👀 Repository Views
 
 <img alt="count" src="https://count.getloli.com/get/@:EXLOUD-VS-Telemetry-Disable?theme=rule34" />
