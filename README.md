@@ -1,4 +1,16 @@
+<div align="center">
+
 # Visual Studio Telemetry Disable Tool
+
+---
+
+### 👀 Repository Views
+
+<img alt="count" src="https://count.getloli.com/get/@:EXLOUD-VS-Telemetry-Disable?theme=rule34" />
+
+**⭐ If this tool helped you, please consider giving it a star! ⭐**
+
+---
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207.0%2B-blue)](https://github.com/PowerShell/PowerShell)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -7,6 +19,8 @@
 ![Preview](./assets/preview.gif)
 
 A comprehensive PowerShell-based tool to disable telemetry and data collection across Microsoft development tools including Visual Studio, Visual Studio Code, .NET CLI, and NuGet.
+
+</div>
 
 ## 🚀 Features
 
@@ -223,6 +237,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📊 Compatibility
 
+<div align="center">
+
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Visual Studio 2015 | ✅ Supported | If installed |
@@ -235,6 +251,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | PowerShell 5.1 | ✅ Supported | Windows PowerShell |
 | PowerShell 7.0+ | ✅ Supported | Recommended |
 
+</div>
+
 ## 🔮 Roadmap
 
 - [ ] GUI interface for easier usage
@@ -244,5 +262,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ ] Integration with package managers
 
 ---
+
 
 **⭐ If this tool helped you, please consider giving it a star!**
