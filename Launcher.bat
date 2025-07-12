@@ -28,15 +28,12 @@ CD /D "%~dp0"
 
 title Visual Studio Telemetry Disable Launcher
 
-:: Set script directory
 set "SCRIPT_DIR=%~dp0"
 
-:: Define PowerShell paths
 set "PS7_PATH=C:\Program Files\PowerShell\7\pwsh.exe"
 set "PS7_PREVIEW_PATH=C:\Program Files\PowerShell\7-preview\pwsh.exe"
 set "PS5_PATH=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-:: Initialize variables
 set "PS_EXE="
 set "PS_SCRIPT="
 set "PS_VERSION="
@@ -76,30 +73,20 @@ exit /b 1
 :found_powershell
 
 :: ====================================================
-:: Detect Windows Version and PowerShell
+:: Detect Windows Version
 :: ====================================================
 for /f "tokens=4-5 delims=. " %%i in ('ver') do (
     set "WIN_MAJOR=%%i"
     set "WIN_MINOR=%%j"
 )
 
-:: Determine script based on Windows version and PowerShell version
-if !WIN_MAJOR! GEQ 10 (
-    if "%PS_VERSION%"=="PowerShell 5" (
-        set "SCRIPT_BASENAME=off_telemetry_ps5.ps1"
-        set "SCRIPT_TYPE=Windows 10/11 - PowerShell 5"
-    ) else (
-        set "SCRIPT_BASENAME=off_telemetry_ps7.ps1"
-        set "SCRIPT_TYPE=Windows 10/11 - PowerShell 7"
-    )
+:: Select appropriate script
+if "%PS_VERSION%"=="PowerShell 5" (
+    set "SCRIPT_BASENAME=off_telemetry_ps5_win7+.ps1"
+    set "SCRIPT_TYPE=PowerShell 5 (Windows 7+)"
 ) else (
-    if "%PS_VERSION%"=="PowerShell 5" (
-        set "SCRIPT_BASENAME=off_telemetry_ps5_win7+.ps1"
-        set "SCRIPT_TYPE=Windows 7/8/8.1 - PowerShell 5"
-    ) else (
-        set "SCRIPT_BASENAME=off_telemetry_ps7.ps1"
-        set "SCRIPT_TYPE=Windows 7/8/8.1 - PowerShell 7"
-    )
+    set "SCRIPT_BASENAME=off_telemetry_ps7.ps1"
+    set "SCRIPT_TYPE=PowerShell 7 (all Windows versions)"
 )
 
 :: ====================================================
