@@ -51,7 +51,17 @@ $Colors = @{
 }
 
 Write-Host "======================================================" -ForegroundColor $Colors.Title
-Write-Host "  by EXLOUD aka BOBER" -ForegroundColor $Colors.Title
+Write-Host ""
+Write-Host "  ███████╗██╗  ██╗██╗      ██████╗ ██╗   ██╗██████╗ " -ForegroundColor $Colors.Title
+Write-Host "  ██╔════╝╚██╗██╔╝██║     ██╔═══██╗██║   ██║██╔══██╗" -ForegroundColor $Colors.Title
+Write-Host "  █████╗   ╚███╔╝ ██║     ██║   ██║██║   ██║██║  ██║" -ForegroundColor $Colors.Title
+Write-Host "  ██╔══╝   ██╔██╗ ██║     ██║   ██║██║   ██║██║  ██║" -ForegroundColor $Colors.Title
+Write-Host "  ███████╗██╔╝ ██╗███████╗╚██████╔╝╚██████╔╝██████╔╝" -ForegroundColor $Colors.Title
+Write-Host "  ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝" -ForegroundColor $Colors.Title
+Write-Host ""
+Write-Host "                     Present" -ForegroundColor $Colors.Gray
+Write-Host "       Visual Studio Telemetry Disable Tool" -ForegroundColor $Colors.Gray
+Write-Host ""
 Write-Host "======================================================" -ForegroundColor $Colors.Title
 
 # =======================================================
