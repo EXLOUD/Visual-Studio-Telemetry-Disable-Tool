@@ -846,7 +846,7 @@ Write-Host "Telemetry Directories Cleanup" -ForegroundColor $Colors.Success
 Write-Host "`n--- Optional: Additional Features and Environment Variables ---" -ForegroundColor $Colors.Section
 
 if ($installedVersions.Count -eq 0) {
-    Write-Host "[SKIP] No Visual Studio installations detected – skipping additional configuration" -ForegroundColor $Colors.Gray
+    Write-Host "[SKIP] No Visual Studio installations detected skipping additional configuration" -ForegroundColor $Colors.Gray
 } else {
     Write-Host "This will perform additional configuration:" -ForegroundColor $Colors.Info
     Write-Host "> Disable Visual Studio Settings Synchronization" -ForegroundColor $Colors.Info
@@ -918,7 +918,7 @@ if ($installedVersions.Count -eq 0) {
     }
 }
 
-Write-Host "`nLegend:" -ForegroundColor White
+Write-Host "`nLegend:" -ForegroundColor $Colors.Gray
 Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success; Write-Host "Action completed successfully"
 Write-Host "[INFO] " -NoNewline -ForegroundColor $Colors.Info; Write-Host "Information or preparatory action"
 Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray; Write-Host "Component not found, skipped"
@@ -929,5 +929,5 @@ if (!$CreateBackup) {
 }
 
 Write-Host "`nRestart may be required for all changes to take effect." -ForegroundColor $Colors.Warning
-Write-Host "Press Enter to exit..." -ForegroundColor White
+Write-Host "Press Enter to exit..." -ForegroundColor $Colors.Gray
 $null = Read-Host
