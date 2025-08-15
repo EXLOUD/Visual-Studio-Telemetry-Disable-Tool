@@ -267,7 +267,7 @@ function Disable-BackgroundDownloadTasks {
                 
                 if ($task.State -eq "Ready") {
                     try {
-                        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction Stop
+                        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop
                         Write-Host "✓ Disabled task: $($task.TaskName)" -ForegroundColor $Colors.Success
                     }
                     catch {
