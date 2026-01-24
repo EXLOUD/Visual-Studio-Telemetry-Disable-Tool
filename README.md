@@ -28,7 +28,7 @@ A comprehensive PowerShell-based tool to disable telemetry and data collection a
 
 ## 🚀 Features
 
-- **Comprehensive Coverage**: Disables telemetry for Visual Studio 2015-2022, VS Code, .NET CLI, and NuGet
+- **Comprehensive Coverage**: Disables telemetry for Visual Studio 2015-2026, VS Code, .NET CLI, and NuGet
 - **Backup & Restore**: Create registry backups before making changes and restore when needed
 - **Smart Detection**: Only modifies existing registry paths - doesn't create unnecessary entries
 - **PowerShell 7 Optimized**: Enhanced performance and modern PowerShell features
@@ -38,7 +38,7 @@ A comprehensive PowerShell-based tool to disable telemetry and data collection a
 
 ## 📋 What Gets Disabled
 
-### Visual Studio (2015-2022)
+### Visual Studio (2015-2026)
 - Customer Experience Improvement Program (CEIP)
 - Feedback dialogs and crash reporting
 - Automatic data collection
