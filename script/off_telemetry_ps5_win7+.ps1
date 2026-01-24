@@ -4,16 +4,16 @@
 .DESCRIPTION
     ====================================================================================
     Based on off_telemetry_ps5.ps1 but without "emojis" for OS win7-8.1 (works on win10/11)
-	P.S. Replace to text : [INFO], [SKIP]..
-	====================================================================================
+    P.S. Replace to text : [INFO], [SKIP]..
+    ====================================================================================
     This script safely disables telemetry, crash reporting, and data collection for:
-    - Visual Studio 2015-2022 (only if installed)
+    - Visual Studio 2015-2026 (only if installed)
     - Visual Studio Code (only if installed)
     - .NET CLI
     - NuGet
     - Various Visual Studio services
-	- PowerShell 7.x (Windows 8+ only)
-	- Visual Studio Background Download (automatic component downloads)
+    - PowerShell 7.x (Windows 8+ only)
+    - Visual Studio Background Download (automatic component downloads)
 .NOTES
     Must be run as Administrator
     Improved safety - only modifies existing registry paths
@@ -39,16 +39,15 @@ param(
 
 $serviceProcessed = $false
 
-
 # Color scheme for consistent output
 $Colors = @{
-    Title = 'Cyan'
+    Title   = 'Cyan'
     Section = 'Yellow'
     Success = 'Green'
-    Info = 'Blue'
+    Info    = 'Blue'
     Warning = 'Yellow'
-    Error = 'Red'
-    Gray = 'Gray'
+    Error   = 'Red'
+    Gray    = 'Gray'
 }
 
 Write-Host "======================================================" -ForegroundColor $Colors.Title
@@ -70,8 +69,8 @@ function New-RegistryBackup {
             "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon",
             "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio",
             "HKEY_CURRENT_USER\Software\Microsoft\VisualStudio",
-			"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\Setup",
-			"HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\Setup",
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
         )
         
         $backupResult = $true
@@ -80,7 +79,8 @@ function New-RegistryBackup {
             $null = & reg export $key $regFile /y 2>$null
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "[OK] Backed up: $key" -ForegroundColor $Colors.Success
-            } else {
+            }
+            else {
                 Write-Host "[INFO] Key not found (skipped): $key" -ForegroundColor $Colors.Gray
             }
         }
@@ -109,7 +109,8 @@ function Restore-RegistryBackup {
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] Registry restored from: $BackupFile" -ForegroundColor $Colors.Success
             return $true
-        } else {
+        }
+        else {
             Write-Host "[ERROR] Failed to restore registry" -ForegroundColor $Colors.Error
             return $false
         }
@@ -139,12 +140,11 @@ function Set-SafeRegistryValue {
             if ($CreatePath) {
                 $null = New-Item -Path $Path -Force
                 Write-Host "[INFO] Created registry path: $Path" -ForegroundColor $Colors.Info
-            } else {
+            }
+            else {
                 Write-Host "[SKIP] Registry path not found, skipping: $Path" -ForegroundColor $Colors.Gray
                 return $false
             }
-        } else {
-            Write-Host "[INFO] Found registry path: $Path" -ForegroundColor $Colors.Info
         }
         
         # Check current value
@@ -174,14 +174,16 @@ function Remove-TelemetryDirectory {
             if ($itemCount -gt 0) {
                 Remove-Item -Path $Path -Recurse -Force -ErrorAction Stop
                 Write-Host "[OK] Removed telemetry directory: $Path ($itemCount items)" -ForegroundColor $Colors.Success
-            } else {
+            }
+            else {
                 Write-Host "[INFO] Telemetry directory already empty: $Path" -ForegroundColor $Colors.Info
             }
         }
         catch {
             Write-Host "[ERROR] Failed to remove: $Path - $_" -ForegroundColor $Colors.Error
         }
-    } else {
+    }
+    else {
         Write-Host "[SKIP] Telemetry directory not found: $Path" -ForegroundColor $Colors.Gray
     }
 }
@@ -207,16 +209,19 @@ function Disable-BackgroundDownloadTasks {
                     catch {
                         Write-Host "[ERROR] Could not disable task $($task.TaskName): $_" -ForegroundColor $Colors.Error
                     }
-                } else {
+                }
+                else {
                     Write-Host "[OK] Task already disabled: $($task.TaskName)" -ForegroundColor $Colors.Success
                 }
             }
             return $true
-        } else {
+        }
+        else {
             Write-Host "[SKIP] No Visual Studio BackgroundDownload tasks found" -ForegroundColor $Colors.Gray
             return $false
         }
-    } catch {
+    }
+    catch {
         Write-Host "[ERROR] Error checking scheduled tasks: $_" -ForegroundColor $Colors.Error
         return $false
     }
@@ -238,11 +243,13 @@ function Stop-BackgroundDownloadProcesses {
                 }
             }
             return $true
-        } else {
+        }
+        else {
             Write-Host "[SKIP] No BackgroundDownload processes currently running" -ForegroundColor $Colors.Gray
             return $false
         }
-    } catch {
+    }
+    catch {
         Write-Host "[ERROR] Error checking processes: $_" -ForegroundColor $Colors.Error
         return $false
     }
@@ -261,7 +268,7 @@ function Remove-BackgroundDownloadTempFolders {
         foreach ($tempPath in $tempPaths) {
             if (Test-Path $tempPath) {
                 $folders = Get-ChildItem -Path $tempPath -Directory -ErrorAction SilentlyContinue | 
-                          Where-Object { $_.Name -match "^[a-zA-Z0-9]{8}\." }
+                Where-Object { $_.Name -match "^[a-zA-Z0-9]{8}\." }
                 
                 foreach ($folder in $folders) {
                     $bgDownloadPath = Join-Path $folder.FullName "resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service\BackgroundDownload.exe"
@@ -284,7 +291,8 @@ function Remove-BackgroundDownloadTempFolders {
         }
         
         return $foldersRemoved -gt 0
-    } catch {
+    }
+    catch {
         Write-Host "[ERROR] Error cleaning temp folders: $_" -ForegroundColor $Colors.Error
         return $false
     }
@@ -301,7 +309,8 @@ function Set-SafeEnvironmentVariable {
         $currentValue = [Environment]::GetEnvironmentVariable($Name, $Target)
         if ($currentValue -eq $Value) {
             Write-Host "[OK] $Name already set to $Value" -ForegroundColor $Colors.Success
-        } else {
+        }
+        else {
             [Environment]::SetEnvironmentVariable($Name, $Value, $Target)
             Write-Host "[OK] Set $Name to $Value" -ForegroundColor $Colors.Success
         }
@@ -310,6 +319,116 @@ function Set-SafeEnvironmentVariable {
     catch {
         Write-Host "[ERROR] Failed to set environment variable $Name : $_" -ForegroundColor $Colors.Error
         return $false
+    }
+}
+
+# =======================================================
+# VISUAL STUDIO DETECTION FUNCTION
+# =======================================================
+
+function Test-VSInstalled {
+    param(
+        [string]$Version,
+        [string]$Year
+    )
+    
+    $detected = $false
+    $detectionMethod = ""
+    
+    # Method 1: vswhere.exe (most reliable for VS 2017+)
+    $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if ((Test-Path $vswherePath) -and !$detected) {
+        try {
+            $vsInstallations = & $vswherePath -all -format json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($vsInstallations) {
+                foreach ($installation in $vsInstallations) {
+                    if ($installation.installationVersion) {
+                        $installedMajorVersion = ($installation.installationVersion -split '\.')[0]
+                        $expectedMajor = ($Version -split '\.')[0]
+                        if ($installedMajorVersion -eq $expectedMajor) {
+                            $detected = $true
+                            $detectionMethod = "vswhere"
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        catch {
+            # vswhere failed, continue to other methods
+        }
+    }
+    
+    # Method 2: Check for devenv.exe
+    if (!$detected) {
+        $installPaths = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio\$Year\*\Common7\IDE\devenv.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\$Year\*\Common7\IDE\devenv.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio $Version\Common7\IDE\devenv.exe"
+        )
+        
+        foreach ($pattern in $installPaths) {
+            $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+            if ($found) {
+                $detected = $true
+                $detectionMethod = "devenv.exe"
+                break
+            }
+        }
+    }
+    
+    # Method 3: Registry key with InstallDir/ProductDir
+    if (!$detected) {
+        $regCheckPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\VisualStudio\$Version\Setup\VS",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\$Version\Setup\VS",
+            "HKLM:\SOFTWARE\Microsoft\VisualStudio\$Version",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\$Version"
+        )
+        
+        foreach ($regPath in $regCheckPaths) {
+            if (Test-Path $regPath) {
+                $regProps = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+                if ($regProps) {
+                    # Check for real installation data
+                    if ($regProps.InstallDir -or $regProps.ProductDir -or $regProps.ShellFolder) {
+                        # Additionally verify path exists
+                        $installPath = $regProps.InstallDir
+                        if (!$installPath) { $installPath = $regProps.ProductDir }
+                        if (!$installPath) { $installPath = $regProps.ShellFolder }
+                        
+                        if ($installPath -and (Test-Path $installPath -ErrorAction SilentlyContinue)) {
+                            $detected = $true
+                            $detectionMethod = "registry (InstallDir)"
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Method 4: Check via Uninstall registry keys
+    if (!$detected) {
+        $uninstallPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+        
+        foreach ($uninstallPath in $uninstallPaths) {
+            $apps = Get-ItemProperty $uninstallPath -ErrorAction SilentlyContinue | 
+            Where-Object { $_.DisplayName -like "*Visual Studio $Year*" -and $_.DisplayName -notlike "*Code*" }
+            if ($apps) {
+                $detected = $true
+                $detectionMethod = "uninstall registry"
+                break
+            }
+        }
+    }
+    
+    return @{
+        Detected = $detected
+        Method   = $detectionMethod
     }
 }
 
@@ -342,92 +461,98 @@ if ($CreateBackup) {
 Write-Host "`n--- Detecting Installed Visual Studio Versions ---" -ForegroundColor $Colors.Section
 
 $vsVersions = @{
-    "14.0" = "Visual Studio 2015"
-    "15.0" = "Visual Studio 2017" 
-    "16.0" = "Visual Studio 2019"
-    "17.0" = "Visual Studio 2022"
+    "14.0" = @{ Name = "Visual Studio 2015"; Year = "2015" }
+    "15.0" = @{ Name = "Visual Studio 2017"; Year = "2017" }
+    "16.0" = @{ Name = "Visual Studio 2019"; Year = "2019" }
+    "17.0" = @{ Name = "Visual Studio 2022"; Year = "2022" }
+    "18.0" = @{ Name = "Visual Studio 2026"; Year = "2026" }
 }
 
 $installedVersions = @()
-foreach ($version in $vsVersions.Keys) {
-    $vsName = $vsVersions[$version]
+
+foreach ($version in $vsVersions.Keys | Sort-Object) {
+    $vsInfo = $vsVersions[$version]
+    $vsName = $vsInfo.Name
+    $vsYear = $vsInfo.Year
     
-    # Check multiple detection methods
-    $detected = $false
+    $result = Test-VSInstalled -Version $version -Year $vsYear
     
-    # Method 1: Registry SQM paths
-    $paths = @(
-        "HKLM:\SOFTWARE\Microsoft\VSCommon\$version",
-        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version"
-    )
-    
-    foreach ($path in $paths) {
-        if (Test-Path $path) {
-            $detected = $true
-            break
-        }
-    }
-    
-    # Method 2: Installation paths
-    if (!$detected) {
-        $installPaths = @(
-            "${env:ProgramFiles}\Microsoft Visual Studio\*\*\Common7\IDE\devenv.exe",
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\*\Common7\IDE\devenv.exe",
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio $version\*\Common7\IDE\devenv.exe"
-        )
-        
-        foreach ($installPath in $installPaths) {
-            if (Get-ChildItem -Path $installPath -ErrorAction SilentlyContinue) {
-                $detected = $true
-                break
-            }
-        }
-    }
-    
-    if ($detected) {
-        Write-Host "[OK] Detected: $vsName (version $version)" -ForegroundColor $Colors.Success
+    if ($result.Detected) {
+        Write-Host "[OK] Detected: $vsName (version $version) via $($result.Method)" -ForegroundColor $Colors.Success
         $installedVersions += $version
-    } else {
-        Write-Host "[SKIP] Not found: $vsName (version $version)" -ForegroundColor $Colors.Gray
+    }
+    else {
+        Write-Host "[SKIP] Not installed: $vsName (version $version)" -ForegroundColor $Colors.Gray
     }
 }
 
 if ($installedVersions.Count -eq 0) {
     Write-Host "[INFO] No Visual Studio installations detected" -ForegroundColor $Colors.Info
 }
+else {
+    Write-Host "`n[INFO] Found $($installedVersions.Count) Visual Studio installation(s)" -ForegroundColor $Colors.Info
+}
 
 # =======================================================
-# VISUAL STUDIO TELEMETRY DISABLE (EXISTING INSTALLATIONS ONLY)
+# VISUAL STUDIO TELEMETRY DISABLE (INSTALLED VERSIONS ONLY)
 # =======================================================
-Write-Host "`n--- Disabling Visual Studio Telemetry (Detected Installations) ---" -ForegroundColor $Colors.Section
+Write-Host "`n--- Disabling Visual Studio Telemetry (Installed Versions Only) ---" -ForegroundColor $Colors.Section
 
-foreach ($version in $installedVersions) {
-    $vsName = $vsVersions[$version]
-    Write-Host "`n--- Processing $vsName (version $version) ---" -ForegroundColor $Colors.Info
-    
-    # Process both architectures
-    $regPaths = @()
-    if ([Environment]::Is64BitOperatingSystem) {
-        $regPaths += "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version\SQM"
-    }
-    $regPaths += "HKLM:\SOFTWARE\Microsoft\VSCommon\$version\SQM"
-    
-    foreach ($regPath in $regPaths) {
-        $null = Set-SafeRegistryValue -Path $regPath -Name "OptIn" -Value 0 -Type 'DWORD'
-    }
-    
-    # Additional paths for this version
-    $additionalPaths = @(
-        "HKCU:\Software\Microsoft\VisualStudio\$version\General"
-    )
-    
-    foreach ($path in $additionalPaths) {
-        $null = Set-SafeRegistryValue -Path $path -Name "EnableSQM" -Value 0 -Type 'DWORD'
+if ($installedVersions.Count -eq 0) {
+    Write-Host "[SKIP] No Visual Studio installations found, skipping telemetry configuration" -ForegroundColor $Colors.Gray
+}
+else {
+    foreach ($version in $installedVersions) {
+        $vsName = $vsVersions[$version].Name
+        Write-Host "`n--- Processing $vsName (version $version) ---" -ForegroundColor $Colors.Info
+        
+        # SQM paths - base VSCommon paths
+        $regBases = @()
+        
+        # 32-bit path
+        $regBases += @{ 
+            BasePath = "HKLM:\SOFTWARE\Microsoft\VSCommon\$version"
+            SqmPath  = "HKLM:\SOFTWARE\Microsoft\VSCommon\$version\SQM"
+            Arch     = "32-bit" 
+        }
+        
+        # 64-bit path (Wow6432Node)
+        if ([Environment]::Is64BitOperatingSystem) {
+            $regBases += @{ 
+                BasePath = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version"
+                SqmPath  = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version\SQM"
+                Arch     = "64-bit (Wow6432Node)" 
+            }
+        }
+        
+        foreach ($regBase in $regBases) {
+            $basePath = $regBase.BasePath
+            $sqmPath = $regBase.SqmPath
+            
+            # Check if base VSCommon\version path exists
+            if (Test-Path $basePath) {
+                Write-Host "[INFO] Found $($regBase.Arch) registry path for $vsName" -ForegroundColor $Colors.Info
+                # Create SQM subkey only if base path exists
+                $null = Set-SafeRegistryValue -Path $sqmPath -Name "OptIn" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            else {
+                Write-Host "[SKIP] $($regBase.Arch) VSCommon path not found for $vsName" -ForegroundColor $Colors.Gray
+            }
+        }
+        
+        # User settings - only if base path exists
+        $userBasePath = "HKCU:\Software\Microsoft\VisualStudio\$version"
+        if (Test-Path $userBasePath) {
+            $null = Set-SafeRegistryValue -Path "$userBasePath\General" -Name "EnableSQM" -Value 0 -Type 'DWORD' -CreatePath
+        }
+        else {
+            Write-Host "[SKIP] User registry path not found for $vsName" -ForegroundColor $Colors.Gray
+        }
     }
 }
 
 # =======================================================
-# VISUAL STUDIO POLICY SETTINGS (CONSERVATIVE APPROACH)
+# VISUAL STUDIO POLICY SETTINGS
 # =======================================================
 Write-Host "`n--- Checking Visual Studio Policy Settings ---" -ForegroundColor $Colors.Section
 
@@ -438,14 +563,14 @@ if ($installedVersions.Count -gt 0) {
     # Policy paths (create only if VS is installed)
     $policyPaths = @{
         "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback" = @{
-            "DisableFeedbackDialog" = 1
-            "DisableEmailInput" = 1
+            "DisableFeedbackDialog"    = 1
+            "DisableEmailInput"        = 1
             "DisableScreenshotCapture" = 1
         }
-        "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM" = @{
+        "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM"      = @{
             "OptIn" = 0
         }
-        "HKCU:\Software\Microsoft\VisualStudio\Telemetry" = @{
+        "HKCU:\Software\Microsoft\VisualStudio\Telemetry"         = @{
             "TurnOffSwitch" = 1
         }
     }
@@ -456,7 +581,8 @@ if ($installedVersions.Count -gt 0) {
             $null = Set-SafeRegistryValue -Path $path -Name $setting.Key -Value $setting.Value -Type 'DWORD' -CreatePath
         }
     }
-} else {
+}
+else {
     Write-Host "[SKIP] No Visual Studio detected, skipping policy configuration" -ForegroundColor $Colors.Gray
 }
 
@@ -471,7 +597,12 @@ $experiencePaths = @(
 )
 
 foreach ($path in $experiencePaths) {
-    $null = Set-SafeRegistryValue -Path $path -Name "CEIPEnable" -Value 0 -Type 'DWORD'
+    if (Test-Path $path) {
+        $null = Set-SafeRegistryValue -Path $path -Name "CEIPEnable" -Value 0 -Type 'DWORD'
+    }
+    else {
+        Write-Host "[SKIP] SQMClient path not found: $path" -ForegroundColor $Colors.Gray
+    }
 }
 
 # =======================================================
@@ -525,14 +656,16 @@ if ($service) {
         catch {
             Write-Host "[ERROR] Could not stop $serviceName : $_" -ForegroundColor $Colors.Error
         }
-    } else {
+    }
+    else {
         Write-Host "[INFO] Service $serviceName already stopped (Status: $($service.Status))" -ForegroundColor $Colors.Info
     }
     
     # Disable service
     if ($service.StartType -eq 'Disabled') {
         Write-Host "[OK] $serviceName already disabled" -ForegroundColor $Colors.Success
-    } else {
+    }
+    else {
         try {
             Set-Service -Name $serviceName -StartupType Disabled -Confirm:$false -ErrorAction Stop
             Write-Host "[OK] Disabled $serviceName" -ForegroundColor $Colors.Success
@@ -541,11 +674,12 @@ if ($service) {
             Write-Host "[ERROR] Could not disable $serviceName : $_" -ForegroundColor $Colors.Error
         }
     }
-} else {
-    Write-Host "[SKIP] $serviceName not found (not installed)" -ForegroundColor $Colors.Gray
+    $serviceProcessed = $true
 }
-
-$serviceProcessed = ($null -ne $service)
+else {
+    Write-Host "[SKIP] $serviceName not found (not installed)" -ForegroundColor $Colors.Gray
+    $serviceProcessed = $false
+}
 
 # =======================================================
 # VISUAL STUDIO CODE SETTINGS
@@ -558,7 +692,8 @@ $vscodeDetected = $false
 
 if (!(Test-Path "$env:APPDATA\Code")) {
     Write-Host "[SKIP] Visual Studio Code not detected" -ForegroundColor $Colors.Gray
-} else {
+}
+else {
     Write-Host "[INFO] Visual Studio Code detected" -ForegroundColor $Colors.Info
     $vscodeDetected = $true
     
@@ -567,22 +702,23 @@ if (!(Test-Path "$env:APPDATA\Code")) {
         try {
             $null = New-Item -Path $vscodeUserDir -ItemType Directory -Force
             Write-Host "[INFO] Created VS Code User directory" -ForegroundColor $Colors.Info
-        } catch {
+        }
+        catch {
             Write-Host "[ERROR] Failed to create VS Code User directory: $_" -ForegroundColor $Colors.Error
         }
     }
 
     # Privacy settings
     $privacyConfig = @{
-        "telemetry.enableTelemetry" = $false
-        "telemetry.enableCrashReporter" = $false
-        "workbench.enableExperiments" = $false
-        "update.mode" = "manual"
-        "update.showReleaseNotes" = $false
-        "extensions.autoCheckUpdates" = $false
+        "telemetry.enableTelemetry"                  = $false
+        "telemetry.enableCrashReporter"              = $false
+        "workbench.enableExperiments"                = $false
+        "update.mode"                                = "manual"
+        "update.showReleaseNotes"                    = $false
+        "extensions.autoCheckUpdates"                = $false
         "extensions.showRecommendationsOnlyOnDemand" = $true
-        "git.autofetch" = $false
-        "npm.fetchOnlinePackageInfo" = $false
+        "git.autofetch"                              = $false
+        "npm.fetchOnlinePackageInfo"                 = $false
     }
 
     try {
@@ -592,9 +728,7 @@ if (!(Test-Path "$env:APPDATA\Code")) {
             $content = Get-Content $vscodeSettings -Raw -ErrorAction SilentlyContinue
             if ($content -and $content.Trim()) {
                 try {
-                    # Use PowerShell's built-in JSON cmdlets
                     $settingsObj = $content | ConvertFrom-Json
-                    # Convert PSCustomObject to hashtable for easier manipulation
                     $settings = @{}
                     $settingsObj.PSObject.Properties | ForEach-Object {
                         $settings[$_.Name] = $_.Value
@@ -602,7 +736,7 @@ if (!(Test-Path "$env:APPDATA\Code")) {
                     Write-Host "[INFO] Found existing VS Code settings file" -ForegroundColor $Colors.Info
                 }
                 catch {
-                    Write-Host "> Could not parse existing settings, creating new ones" -ForegroundColor $Colors.Warning
+                    Write-Host "[WARNING] Could not parse existing settings, creating new ones" -ForegroundColor $Colors.Warning
                     $settings = @{}
                 }
             }
@@ -614,7 +748,8 @@ if (!(Test-Path "$env:APPDATA\Code")) {
             $value = $privacyConfig[$key]
             if ($settings.ContainsKey($key) -and $settings[$key] -eq $value) {
                 Write-Host "[OK] $key already set to $value" -ForegroundColor $Colors.Success
-            } else {
+            }
+            else {
                 $settings[$key] = $value
                 Write-Host "[OK] Updated $key to $value" -ForegroundColor $Colors.Success
                 $changesMade = $true
@@ -626,7 +761,8 @@ if (!(Test-Path "$env:APPDATA\Code")) {
             $json = $settings | ConvertTo-Json -Depth 10
             $json | Out-File -FilePath $vscodeSettings -Encoding UTF8
             Write-Host "[OK] Saved VS Code privacy settings" -ForegroundColor $Colors.Success
-        } else {
+        }
+        else {
             Write-Host "[INFO] No changes needed for VS Code settings" -ForegroundColor $Colors.Info
         }
     }
@@ -666,30 +802,24 @@ if ($installedVersions.Count -gt 0) {
         }
         
         if ($shouldProcess) {
-            # Create the registry path if it doesn't exist (since we're configuring VS Setup)
-            if (!(Test-Path $regPath)) {
-                try {
-                    $null = New-Item -Path $regPath -Force -ErrorAction Stop
-                    Write-Host "[INFO] Created registry path: $regPath" -ForegroundColor $Colors.Info
+            # Check if Setup path exists before modifying
+            if (Test-Path $regPath) {
+                # Set the registry values
+                $regSettings = @{
+                    "BackgroundDownloadDisabled" = 1
+                    "DisableBackgroundDownloads" = 1
+                    "DisableAutomaticUpdates"    = 1
                 }
-                catch {
-                    Write-Host "[ERROR] Could not create registry path $regPath : $_" -ForegroundColor $Colors.Error
-                    continue
+                
+                foreach ($setting in $regSettings.GetEnumerator()) {
+                    $success = Set-SafeRegistryValue -Path $regPath -Name $setting.Key -Value $setting.Value -Type 'DWORD'
+                    if ($success) {
+                        $regKeysSet = $true
+                    }
                 }
             }
-            
-            # Set the registry values
-            $regSettings = @{
-                "BackgroundDownloadDisabled" = 1
-                "DisableBackgroundDownloads" = 1
-                "DisableAutomaticUpdates" = 1
-            }
-            
-            foreach ($setting in $regSettings.GetEnumerator()) {
-                $success = Set-SafeRegistryValue -Path $regPath -Name $setting.Key -Value $setting.Value -Type 'DWORD'
-                if ($success) {
-                    $regKeysSet = $true
-                }
+            else {
+                Write-Host "[SKIP] Setup registry path not found: $regPath" -ForegroundColor $Colors.Gray
             }
         }
     }
@@ -721,14 +851,16 @@ if ($installedVersions.Count -gt 0) {
             Write-Host "[WARNING] Could not verify registry settings" -ForegroundColor $Colors.Warning
         }
         
-    } catch {
+    }
+    catch {
         Write-Host "[WARNING] Verification error: $_" -ForegroundColor $Colors.Warning
     }
     
     # Set processed flag if any operation was successful
     $backgroundDownloadProcessed = $tasksProcessed -or $regKeysSet -or $processesProcessed -or $tempFoldersProcessed
     
-} else {
+}
+else {
     Write-Host "[SKIP] No Visual Studio installations detected, skipping BackgroundDownload configuration" -ForegroundColor $Colors.Gray
 }
 
@@ -743,20 +875,14 @@ try {
     $osVersion = [System.Environment]::OSVersion.Version
     $windowsVersion = "$($osVersion.Major).$($osVersion.Minor)"
     
-    # Windows version mapping:
-    # Windows 7: 6.1
-    # Windows 8: 6.2
-    # Windows 8.1: 6.3
-    # Windows 10: 10.0
-    # Windows 11: 10.0 (build 22000+)
-    
     $isWindows8Plus = ($osVersion.Major -gt 6) -or ($osVersion.Major -eq 6 -and $osVersion.Minor -ge 2)
     
     if ($isWindows8Plus) {
         Write-Host "[INFO] Windows version $windowsVersion detected (Windows 8+)" -ForegroundColor $Colors.Info
         $null = Set-SafeEnvironmentVariable -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
         $powershellTelemetryProcessed = $true
-    } else {
+    }
+    else {
         Write-Host "[SKIP] Windows version $windowsVersion detected (Windows 7), skipping PowerShell telemetry disable" -ForegroundColor $Colors.Gray
         Write-Host "[INFO] PowerShell telemetry disable is only applied on Windows 8 and newer" -ForegroundColor $Colors.Info
     }
@@ -779,11 +905,19 @@ Write-Host "`nProcessed telemetry settings for:" -ForegroundColor White
 
 # Visual Studio versions with status colors
 if ($installedVersions.Count -gt 0) {
-    foreach ($version in $installedVersions) {
+    foreach ($version in $installedVersions | Sort-Object) {
         Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
-        Write-Host "$($vsVersions[$version]) (detected)" -ForegroundColor $Colors.Success
+        Write-Host "$($vsVersions[$version].Name) (detected)" -ForegroundColor $Colors.Success
     }
-} else {
+    
+    # Show skipped versions
+    $skippedVersions = $vsVersions.Keys | Where-Object { $_ -notin $installedVersions } | Sort-Object
+    foreach ($version in $skippedVersions) {
+        Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+        Write-Host "$($vsVersions[$version].Name) (not installed)" -ForegroundColor $Colors.Gray
+    }
+}
+else {
     Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "No Visual Studio versions detected" -ForegroundColor $Colors.Gray
 }
@@ -792,7 +926,8 @@ if ($installedVersions.Count -gt 0) {
 if ($vscodeDetected) {
     Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
     Write-Host "Visual Studio Code (detected)" -ForegroundColor $Colors.Success
-} else {
+}
+else {
     Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "Visual Studio Code (not found)" -ForegroundColor $Colors.Gray
 }
@@ -804,14 +939,12 @@ Write-Host ".NET CLI" -ForegroundColor $Colors.Success
 Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
 Write-Host "NuGet" -ForegroundColor $Colors.Success
 
-Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
-Write-Host "Settings Synchronization" -ForegroundColor $Colors.Success
-
 # VS Standard Collector Service status
 if ($serviceProcessed) {
     Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
     Write-Host "VS Standard Collector Service (processed)" -ForegroundColor $Colors.Success
-} else {
+}
+else {
     Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "VS Standard Collector Service (not found)" -ForegroundColor $Colors.Gray
 }
@@ -820,7 +953,8 @@ if ($serviceProcessed) {
 if ($backgroundDownloadProcessed) {
     Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
     Write-Host "Visual Studio Background Download (disabled)" -ForegroundColor $Colors.Success
-} else {
+}
+else {
     Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "Visual Studio Background Download (not processed)" -ForegroundColor $Colors.Gray
 }
@@ -829,7 +963,8 @@ if ($backgroundDownloadProcessed) {
 if ($powershellTelemetryProcessed) {
     Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
     Write-Host "PowerShell 7 Telemetry (disabled)" -ForegroundColor $Colors.Success
-} else {
+}
+else {
     Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "PowerShell 7 Telemetry (Windows 7 - not supported)" -ForegroundColor $Colors.Gray
 }
@@ -846,14 +981,15 @@ Write-Host "Telemetry Directories Cleanup" -ForegroundColor $Colors.Success
 Write-Host "`n--- Optional: Additional Features and Environment Variables ---" -ForegroundColor $Colors.Section
 
 if ($installedVersions.Count -eq 0) {
-    Write-Host "[SKIP] No Visual Studio installations detected skipping additional configuration" -ForegroundColor $Colors.Gray
-} else {
+    Write-Host "[SKIP] No Visual Studio installations detected, skipping additional configuration" -ForegroundColor $Colors.Gray
+}
+else {
     Write-Host "This will perform additional configuration:" -ForegroundColor $Colors.Info
     Write-Host "> Disable Visual Studio Settings Synchronization" -ForegroundColor $Colors.Info
     Write-Host "> Disable Live Share" -ForegroundColor $Colors.Info
     Write-Host "> Disable IntelliCode" -ForegroundColor $Colors.Info
     Write-Host "> Disable CodeLens" -ForegroundColor $Colors.Info
-    Write-Host "> Set additional environment variables :" -ForegroundColor $Colors.Info
+    Write-Host "> Set additional environment variables:" -ForegroundColor $Colors.Info
     Write-Host "  - INTELLICODE_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
     Write-Host "  - LIVESHARE_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
     Write-Host "  - VSSDK_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
@@ -861,48 +997,30 @@ if ($installedVersions.Count -eq 0) {
     $enableAdditional = Read-Host "`nEnable additional configuration? (y/n)"
 
     if ($enableAdditional -match '^y(es)?$') {
-        # === START: Disabling Additional Visual Studio Features ===
-
         Write-Host "`n--- Disabling Additional Visual Studio Features ---" -ForegroundColor $Colors.Section
 
         foreach ($version in $installedVersions) {
-            $vsName = $vsVersions[$version]
+            $vsName = $vsVersions[$version].Name
             Write-Host "`n--- Processing Additional Features for $vsName (version $version) ---" -ForegroundColor $Colors.Info
 
-            # Settings Sync
-            $settingsPaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\Settings",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\Settings"
-            )
-            foreach ($path in $settingsPaths) {
-                $null = Set-SafeRegistryValue -Path $path -Name "SyncSettings" -Value 0 -Type 'DWORD' -CreatePath
-            }
+            # Check user base path
+            $userBasePath = "HKCU:\Software\Microsoft\VisualStudio\$version"
+            
+            if (Test-Path $userBasePath) {
+                # Settings Sync
+                $null = Set-SafeRegistryValue -Path "$userBasePath\Settings" -Name "SyncSettings" -Value 0 -Type 'DWORD' -CreatePath
 
-            # Live Share
-            $liveSharePaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\LiveShare",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\LiveShare"
-            )
-            foreach ($path in $liveSharePaths) {
-                $null = Set-SafeRegistryValue -Path $path -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
-            }
+                # Live Share
+                $null = Set-SafeRegistryValue -Path "$userBasePath\LiveShare" -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
 
-            # IntelliCode
-            $intelliCodePaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliCode",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\IntelliCode"
-            )
-            foreach ($path in $intelliCodePaths) {
-                $null = Set-SafeRegistryValue -Path $path -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
-            }
+                # IntelliCode
+                $null = Set-SafeRegistryValue -Path "$userBasePath\IntelliCode" -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
 
-            # CodeLens
-            $codeLensPaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\CodeLens",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\TextEditor\CodeLens"
-            )
-            foreach ($path in $codeLensPaths) {
-                $null = Set-SafeRegistryValue -Path $path -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+                # CodeLens
+                $null = Set-SafeRegistryValue -Path "$userBasePath\CodeLens" -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            else {
+                Write-Host "[SKIP] User registry path not found for $vsName, skipping additional features" -ForegroundColor $Colors.Gray
             }
         }
 
@@ -913,7 +1031,8 @@ if ($installedVersions.Count -eq 0) {
         $null = Set-SafeEnvironmentVariable -Name 'VSSDK_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
 
         Write-Host "`n[OK] Additional configuration completed" -ForegroundColor $Colors.Success
-    } else {
+    }
+    else {
         Write-Host "[SKIP] Skipping additional configuration" -ForegroundColor $Colors.Info
     }
 }
@@ -921,8 +1040,9 @@ if ($installedVersions.Count -eq 0) {
 Write-Host "`nLegend:" -ForegroundColor $Colors.Gray
 Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success; Write-Host "Action completed successfully"
 Write-Host "[INFO] " -NoNewline -ForegroundColor $Colors.Info; Write-Host "Information or preparatory action"
-Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray; Write-Host "Component not found, skipped"
+Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray; Write-Host "Component not found or skipped"
 Write-Host "[ERROR] " -NoNewline -ForegroundColor $Colors.Error; Write-Host "Error occurred"
+Write-Host "[WARNING] " -NoNewline -ForegroundColor $Colors.Warning; Write-Host "Warning message"
 
 if (!$CreateBackup) {
     Write-Host "`nTip: Run with -CreateBackup parameter to create registry backup first" -ForegroundColor $Colors.Warning

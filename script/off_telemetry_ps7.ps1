@@ -1,53 +1,53 @@
-using namespace System.Collections.Generic
-
 <#
 .SYNOPSIS
-    Enhanced comprehensive script to disable telemetry in Microsoft development tools with backup/restore functionality
+    Improved comprehensive script to disable telemetry in Microsoft development tools
 .DESCRIPTION
-    This script disables telemetry, crash reporting, and data collection for:
-    - Visual Studio 2015-2022 (only if installed)
+    ====================================================================================
+    Based on off_telemetry_ps5.ps1 but without "emojis" for OS win7-8.1 (works on win10/11)
+    P.S. Replace to text : [INFO], [SKIP]..
+    ====================================================================================
+    This script safely disables telemetry, crash reporting, and data collection for:
+    - Visual Studio 2015-2026 (only if installed)
     - Visual Studio Code (only if installed)
-    - Visual Studio Background Download ( OFF automatic component downloads)
     - .NET CLI
     - NuGet
     - Various Visual Studio services
+    - PowerShell 7.x (Windows 8+ only)
+    - Visual Studio Background Download (automatic component downloads)
 .NOTES
     Must be run as Administrator
-    Only modifies existing registry paths - does not create new ones
-    Requires PowerShell 7.0+
+    Improved safety - only modifies existing registry paths
+    Compatible with PowerShell 5.x
     Includes comprehensive backup and restore functionality
 .PARAMETER CreateBackup
     Creates registry backup before making changes
 .PARAMETER RestoreBackup
     Restores registry from backup file
 .PARAMETER BackupPath
-    Path for backup file (default: Desktop with timestamp)
-.PARAMETER DisableBackgroundDownload
-    Specifically disable Visual Studio Background Download feature
+    Path for backup file (default: Desktop)
 .EXAMPLE
-    .\off_telemetry_ps7.ps1 -CreateBackup
-    .\off_telemetry_ps7.ps1 -RestoreBackup -BackupPath "C:\Backup\registry_backup.reg"
-    .\off_telemetry_ps7.ps1 -CreateBackup -BackupPath "C:\MyBackups\telemetry_backup.reg"
-    .\off_telemetry_ps7.ps1 -DisableBackgroundDownload
+    .\off_telemetry_ps5_win7+.ps1 -CreateBackup
+    .\off_telemetry_ps5_win7+.ps1 -RestoreBackup -BackupPath "C:\Backup\registry_backup.reg"
 #>
 
 param(
     [switch]$CreateBackup,
     [switch]$RestoreBackup,
     [string]$BackupPath = "$env:USERPROFILE\Desktop\telemetry_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').reg",
-	[switch]$DisableBackgroundDownload
+    [switch]$DisableBackgroundDownload
 )
+
+$serviceProcessed = $false
 
 # Color scheme for consistent output
 $Colors = @{
-    Title = 'Cyan'
+    Title   = 'Cyan'
     Section = 'Yellow'
     Success = 'Green'
-    Info = 'Blue'
+    Info    = 'Blue'
     Warning = 'Yellow'
-    Error = 'Red'
-    Gray = 'Gray'
-    White = 'White'
+    Error   = 'Red'
+    Gray    = 'Gray'
 }
 
 Write-Host "======================================================" -ForegroundColor $Colors.Title
@@ -59,174 +59,108 @@ Write-Host "======================================================" -ForegroundC
 # =======================================================
 
 function New-RegistryBackup {
-    <#
-    .SYNOPSIS
-        Creates backup of telemetry-related registry keys
-    .PARAMETER BackupFile
-        Path where backup file will be created
-    #>
     param([string]$BackupFile)
     
     Write-Host "`n--- Creating Registry Backup ---" -ForegroundColor $Colors.Section
     
     try {
-        # Ensure backup directory exists
-        $backupDir = Split-Path -Path $BackupFile -Parent
-        if (!(Test-Path $backupDir)) {
-            New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
-            Write-Host "→ Created backup directory: $backupDir" -ForegroundColor $Colors.Info
-        }
+        $backupKeys = @(
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon",
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon",
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio",
+            "HKEY_CURRENT_USER\Software\Microsoft\VisualStudio",
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\Setup",
+            "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
+        )
         
-        # Registry keys to backup
-        $backupKeys = [ordered]@{
-            "VSCommon_x64" = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon"
-            "VSCommon_x86" = "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon"
-            "VSPolicies" = "HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio"
-            "VSUser" = "HKEY_CURRENT_USER\Software\Microsoft\VisualStudio"
-            "SQMClient_x64" = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\SQMClient"
-            "SQMClient_x86" = "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\SQMClient"
-			"VSSetup_x64" = "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\Setup"
-			"VSSetup_x86" = "HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\Setup"
-        }
-        
-        $backupCount = 0
-        $backupContent = @()
-        
-        # Add header to backup file
-        $backupContent += "Windows Registry Editor Version 5.00"
-        $backupContent += ""
-        $backupContent += "; Telemetry Registry Backup created on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-        $backupContent += "; Generated by Enhanced Telemetry Manager for PowerShell 7.0+"
-        $backupContent += ""
-        
-        foreach ($keyInfo in $backupKeys.GetEnumerator()) {
-            $keyName = $keyInfo.Key
-            $keyPath = $keyInfo.Value
-            
-            Write-Host "→ Checking registry key: $keyName" -ForegroundColor $Colors.Info
-            
-            # Use reg.exe to export individual keys
-            $tempFile = [System.IO.Path]::GetTempFileName() + ".reg"
-            try {
-                $process = Start-Process -FilePath "reg.exe" -ArgumentList @("export", $keyPath, $tempFile, "/y") -Wait -PassThru -NoNewWindow -RedirectStandardOutput $null -RedirectStandardError $null
-                
-                if ($process.ExitCode -eq 0 -and (Test-Path $tempFile)) {
-                    $keyContent = Get-Content -Path $tempFile -Encoding Unicode | Where-Object { $_ -notmatch "^Windows Registry Editor" -and $_ -ne "" }
-                    if ($keyContent) {
-                        $backupContent += ""
-                        $backupContent += "; === $keyName ==="
-                        $backupContent += $keyContent
-                        $backupCount++
-                        Write-Host "✓ Backed up: $keyName" -ForegroundColor $Colors.Success
-                    } else {
-                        Write-Host "→ Key exists but is empty: $keyName" -ForegroundColor $Colors.Gray
-                    }
-                } else {
-                    Write-Host "→ Key not found (will be skipped): $keyName" -ForegroundColor $Colors.Gray
-                }
+        $backupResult = $true
+        foreach ($key in $backupKeys) {
+            $regFile = $BackupFile -replace '\.reg$', "_$($key -replace '[\\:]', '_').reg"
+            $null = & reg export $key $regFile /y 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[OK] Backed up: $key" -ForegroundColor $Colors.Success
             }
-            finally {
-                if (Test-Path $tempFile) {
-                    Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
-                }
+            else {
+                Write-Host "[INFO] Key not found (skipped): $key" -ForegroundColor $Colors.Gray
             }
         }
         
-        # Save consolidated backup file
-        if ($backupCount -gt 0) {
-            $backupContent | Out-File -FilePath $BackupFile -Encoding Unicode -Force
-            Write-Host "✓ Registry backup completed: $BackupFile" -ForegroundColor $Colors.Success
-            Write-Host "→ Backed up $backupCount registry sections" -ForegroundColor $Colors.Info
-            return $true
-        } else {
-            Write-Host "→ No registry keys found to backup" -ForegroundColor $Colors.Warning
-            return $false
-        }
+        Write-Host "[OK] Registry backup completed" -ForegroundColor $Colors.Success
+        return $backupResult
     }
     catch {
-        Write-Host "✗ Failed to create backup: $_" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Failed to create backup: $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
 function Restore-RegistryBackup {
-    <#
-    .SYNOPSIS
-        Restores registry from backup file
-    .PARAMETER BackupFile
-        Path to backup file to restore from
-    #>
     param([string]$BackupFile)
     
     Write-Host "`n--- Restoring Registry Backup ---" -ForegroundColor $Colors.Section
     
     if (!(Test-Path $BackupFile)) {
-        Write-Host "✗ Backup file not found: $BackupFile" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Backup file not found: $BackupFile" -ForegroundColor $Colors.Error
         return $false
     }
     
     try {
-        Write-Host "→ Validating backup file format..." -ForegroundColor $Colors.Info
-        
-        # Validate backup file
-        $content = Get-Content -Path $BackupFile -TotalCount 5
-        if ($content[0] -notmatch "Windows Registry Editor") {
-            Write-Host "✗ Invalid backup file format" -ForegroundColor $Colors.Error
-            return $false
-        }
-        
-        Write-Host "→ Importing registry backup..." -ForegroundColor $Colors.Info
-        $process = Start-Process -FilePath "reg.exe" -ArgumentList @("import", $BackupFile) -Wait -PassThru -NoNewWindow
-        
-        if ($process.ExitCode -eq 0) {
-            Write-Host "✓ Registry restored successfully from: $BackupFile" -ForegroundColor $Colors.Success
-            Write-Host "→ Restart may be required for changes to take effect" -ForegroundColor $Colors.Warning
+        $null = & reg import $BackupFile
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] Registry restored from: $BackupFile" -ForegroundColor $Colors.Success
             return $true
-        } else {
-            Write-Host "✗ Failed to restore registry (Exit code: $($process.ExitCode))" -ForegroundColor $Colors.Error
+        }
+        else {
+            Write-Host "[ERROR] Failed to restore registry" -ForegroundColor $Colors.Error
             return $false
         }
     }
     catch {
-        Write-Host "✗ Error restoring backup: $_" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Error restoring backup: $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
 # =======================================================
-# ENHANCED REGISTRY FUNCTIONS
+# SAFE REGISTRY FUNCTIONS
 # =======================================================
 
-function Set-RegistryValue {
+function Set-SafeRegistryValue {
     param(
         [string]$Path,
         [string]$Name,
         [object]$Value,
-        [Microsoft.Win32.RegistryValueKind]$Type = [Microsoft.Win32.RegistryValueKind]::DWord
+        [string]$Type = 'DWORD',
+        [switch]$CreatePath
     )
-
+    
     try {
-        # Створити ключ, якщо його немає
+        # Check if path exists
         if (!(Test-Path $Path)) {
-            New-Item -Path $Path -Force | Out-Null
-            Write-Host "→ Created registry path: $Path" -ForegroundColor $Colors.Info
+            if ($CreatePath) {
+                $null = New-Item -Path $Path -Force
+                Write-Host "[INFO] Created registry path: $Path" -ForegroundColor $Colors.Info
+            }
+            else {
+                Write-Host "[SKIP] Registry path not found, skipping: $Path" -ForegroundColor $Colors.Gray
+                return $false
+            }
         }
-
-        # Отримати поточне значення
-        $current = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-
-        if ($null -ne $current -and $current.$Name -eq $Value) {
-            Write-Host "✓ $Name already set to $Value in $Path" -ForegroundColor $Colors.Success
+        
+        # Check current value
+        $currentValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        if ($currentValue -and $currentValue.$Name -eq $Value) {
+            Write-Host "[OK] $Name already set to $Value" -ForegroundColor $Colors.Success
             return $true
         }
-
-        # Встановити або оновити значення
-        Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -Force
-        Write-Host "✓ Set $Name to $Value in $Path" -ForegroundColor $Colors.Success
+        
+        # Set new value
+        $null = New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $Type -Force -ErrorAction Stop
+        Write-Host "[OK] Set $Name to $Value in $Path" -ForegroundColor $Colors.Success
         return $true
     }
     catch {
-        Write-Host "✗ Failed to set $Name in $Path : $_" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Failed to set $Name in $Path : $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
@@ -238,22 +172,24 @@ function Remove-TelemetryDirectory {
         try {
             $itemCount = (Get-ChildItem -Path $Path -Recurse -ErrorAction SilentlyContinue | Measure-Object).Count
             if ($itemCount -gt 0) {
-                Remove-Item -Path $Path -Recurse -Force -Verbose:$false -ErrorAction Stop
-                Write-Host "✓ Removed telemetry directory: $Path ($itemCount items)" -ForegroundColor $Colors.Success
-            } else {
-                Write-Host "→ Telemetry directory already empty: $Path" -ForegroundColor $Colors.Info
+                Remove-Item -Path $Path -Recurse -Force -ErrorAction Stop
+                Write-Host "[OK] Removed telemetry directory: $Path ($itemCount items)" -ForegroundColor $Colors.Success
+            }
+            else {
+                Write-Host "[INFO] Telemetry directory already empty: $Path" -ForegroundColor $Colors.Info
             }
         }
         catch {
-            Write-Host "✗ Failed to remove: $Path - $_" -ForegroundColor $Colors.Error
+            Write-Host "[ERROR] Failed to remove: $Path - $_" -ForegroundColor $Colors.Error
         }
-    } else {
-        Write-Host "→ Telemetry directory not found: $Path" -ForegroundColor $Colors.Gray
+    }
+    else {
+        Write-Host "[SKIP] Telemetry directory not found: $Path" -ForegroundColor $Colors.Gray
     }
 }
 
 function Disable-BackgroundDownloadTasks {
-    Write-Host "→ Checking for Visual Studio BackgroundDownload scheduled tasks..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Checking for Visual Studio BackgroundDownload scheduled tasks..." -ForegroundColor $Colors.Info
     
     try {
         $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
@@ -263,33 +199,36 @@ function Disable-BackgroundDownloadTasks {
         
         if ($tasks) {
             foreach ($task in $tasks) {
-                Write-Host "→ Found task: $($task.TaskName) at $($task.TaskPath)" -ForegroundColor $Colors.Info
+                Write-Host "[INFO] Found task: $($task.TaskName) at $($task.TaskPath)" -ForegroundColor $Colors.Info
                 
                 if ($task.State -eq "Ready") {
                     try {
-                        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop
-                        Write-Host "✓ Disabled task: $($task.TaskName)" -ForegroundColor $Colors.Success
+                        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction Stop
+                        Write-Host "[OK] Disabled task: $($task.TaskName)" -ForegroundColor $Colors.Success
                     }
                     catch {
-                        Write-Host "✗ Could not disable task $($task.TaskName): $_" -ForegroundColor $Colors.Error
+                        Write-Host "[ERROR] Could not disable task $($task.TaskName): $_" -ForegroundColor $Colors.Error
                     }
-                } else {
-                    Write-Host "✓ Task already disabled: $($task.TaskName)" -ForegroundColor $Colors.Success
+                }
+                else {
+                    Write-Host "[OK] Task already disabled: $($task.TaskName)" -ForegroundColor $Colors.Success
                 }
             }
             return $true
-        } else {
-            Write-Host "→ No Visual Studio BackgroundDownload tasks found" -ForegroundColor $Colors.Gray
+        }
+        else {
+            Write-Host "[SKIP] No Visual Studio BackgroundDownload tasks found" -ForegroundColor $Colors.Gray
             return $false
         }
-    } catch {
-        Write-Host "✗ Error checking scheduled tasks: $_" -ForegroundColor $Colors.Error
+    }
+    catch {
+        Write-Host "[ERROR] Error checking scheduled tasks: $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
 function Stop-BackgroundDownloadProcesses {
-    Write-Host "→ Checking for running BackgroundDownload processes..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Checking for running BackgroundDownload processes..." -ForegroundColor $Colors.Info
     
     try {
         $processes = Get-Process -Name "BackgroundDownload" -ErrorAction SilentlyContinue
@@ -297,25 +236,27 @@ function Stop-BackgroundDownloadProcesses {
             foreach ($process in $processes) {
                 try {
                     Stop-Process -Id $process.Id -Force -ErrorAction Stop
-                    Write-Host "✓ Stopped process: BackgroundDownload.exe (PID: $($process.Id))" -ForegroundColor $Colors.Success
+                    Write-Host "[OK] Stopped process: BackgroundDownload.exe (PID: $($process.Id))" -ForegroundColor $Colors.Success
                 }
                 catch {
-                    Write-Host "✗ Could not stop process PID $($process.Id): $_" -ForegroundColor $Colors.Error
+                    Write-Host "[ERROR] Could not stop process PID $($process.Id): $_" -ForegroundColor $Colors.Error
                 }
             }
             return $true
-        } else {
-            Write-Host "→ No BackgroundDownload processes currently running" -ForegroundColor $Colors.Gray
+        }
+        else {
+            Write-Host "[SKIP] No BackgroundDownload processes currently running" -ForegroundColor $Colors.Gray
             return $false
         }
-    } catch {
-        Write-Host "✗ Error checking processes: $_" -ForegroundColor $Colors.Error
+    }
+    catch {
+        Write-Host "[ERROR] Error checking processes: $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
 function Remove-BackgroundDownloadTempFolders {
-    Write-Host "→ Cleaning BackgroundDownload temporary folders..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Cleaning BackgroundDownload temporary folders..." -ForegroundColor $Colors.Info
     
     try {
         $tempPaths = @(
@@ -327,18 +268,18 @@ function Remove-BackgroundDownloadTempFolders {
         foreach ($tempPath in $tempPaths) {
             if (Test-Path $tempPath) {
                 $folders = Get-ChildItem -Path $tempPath -Directory -ErrorAction SilentlyContinue | 
-                          Where-Object { $_.Name -match "^[a-zA-Z0-9]{8}\." }
+                Where-Object { $_.Name -match "^[a-zA-Z0-9]{8}\." }
                 
                 foreach ($folder in $folders) {
                     $bgDownloadPath = Join-Path $folder.FullName "resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service\BackgroundDownload.exe"
                     if (Test-Path $bgDownloadPath) {
                         try {
                             Remove-Item -Path $folder.FullName -Recurse -Force -ErrorAction Stop
-                            Write-Host "✓ Removed temp folder: $($folder.Name)" -ForegroundColor $Colors.Success
+                            Write-Host "[OK] Removed temp folder: $($folder.Name)" -ForegroundColor $Colors.Success
                             $foldersRemoved++
                         }
                         catch {
-                            Write-Host "✗ Could not remove folder $($folder.Name): $_" -ForegroundColor $Colors.Error
+                            Write-Host "[ERROR] Could not remove folder $($folder.Name): $_" -ForegroundColor $Colors.Error
                         }
                     }
                 }
@@ -346,17 +287,18 @@ function Remove-BackgroundDownloadTempFolders {
         }
         
         if ($foldersRemoved -eq 0) {
-            Write-Host "→ No BackgroundDownload temp folders found" -ForegroundColor $Colors.Gray
+            Write-Host "[SKIP] No BackgroundDownload temp folders found" -ForegroundColor $Colors.Gray
         }
         
         return $foldersRemoved -gt 0
-    } catch {
-        Write-Host "✗ Error cleaning temp folders: $_" -ForegroundColor $Colors.Error
+    }
+    catch {
+        Write-Host "[ERROR] Error cleaning temp folders: $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
-function Set-EnvironmentVariableIfNeeded {
+function Set-SafeEnvironmentVariable {
     param(
         [string]$Name,
         [string]$Value,
@@ -366,177 +308,307 @@ function Set-EnvironmentVariableIfNeeded {
     try {
         $currentValue = [Environment]::GetEnvironmentVariable($Name, $Target)
         if ($currentValue -eq $Value) {
-            Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-			Write-Host "$Name " -NoNewline -ForegroundColor $Colors.Info
-			Write-Host "already set to " -NoNewline -ForegroundColor $Colors.White
-			Write-Host "$Value" -ForegroundColor $Colors.Success
-        } else {
+            Write-Host "[OK] $Name already set to $Value" -ForegroundColor $Colors.Success
+        }
+        else {
             [Environment]::SetEnvironmentVariable($Name, $Value, $Target)
-            Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-			Write-Host "Set " -NoNewline -ForegroundColor $Colors.White
-			Write-Host "$Name " -NoNewline -ForegroundColor $Colors.Info
-			Write-Host "to " -NoNewline -ForegroundColor $Colors.White
-			Write-Host "$Value" -ForegroundColor $Colors.Success
+            Write-Host "[OK] Set $Name to $Value" -ForegroundColor $Colors.Success
         }
         return $true
     }
     catch {
-        Write-Host "✗ Failed to set environment variable $Name : $_" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Failed to set environment variable $Name : $_" -ForegroundColor $Colors.Error
         return $false
     }
 }
 
 # =======================================================
-# MAIN SCRIPT LOGIC - HANDLE BACKUP/RESTORE OPERATIONS
+# VISUAL STUDIO DETECTION FUNCTION
 # =======================================================
 
-# Handle restore operation first
-if ($RestoreBackup) {
-    $restored = Restore-RegistryBackup -BackupFile $BackupPath
-    if ($restored) {
-        Write-Host "`n✓ Restore operation completed successfully!" -ForegroundColor $Colors.Success
-        Write-Host "→ Your telemetry settings have been restored from backup" -ForegroundColor $Colors.Info
-    } else {
-        Write-Host "`n✗ Restore operation failed!" -ForegroundColor $Colors.Error
-    }
-    Write-Host "`nPress Enter to exit..." -ForegroundColor $Colors.White
-    Read-Host
-    exit
-}
-
-# Handle backup creation
-if ($CreateBackup) {
-    $backupCreated = New-RegistryBackup -BackupFile $BackupPath
-    if ($backupCreated) {
-        Write-Host "`n✓ Backup created successfully at: $BackupPath" -ForegroundColor $Colors.Success
-        Write-Host "→ You can restore with: .\off_telemetry_ps7.ps1 -RestoreBackup -BackupPath '$BackupPath'" -ForegroundColor $Colors.Info
-    } else {
-        Write-Host "`n→ Backup creation completed (no existing telemetry settings found)" -ForegroundColor $Colors.Warning
-    }
+function Test-VSInstalled {
+    param(
+        [string]$Version,
+        [string]$Year
+    )
     
-    Write-Host "`nOptions:" -ForegroundColor $Colors.White
-    Write-Host "1. Continue with telemetry disable (recommended)" -ForegroundColor $Colors.Info
-    Write-Host "2. Exit and run backup restore later" -ForegroundColor $Colors.Info
-    $choice = Read-Host "`nContinue with telemetry disable? (y/n)"
+    $detected = $false
+    $detectionMethod = ""
     
-    if ($choice -ne 'y' -and $choice -ne 'Y' -and $choice -ne '1') {
-        Write-Host "Exiting. Run the script again without -CreateBackup to disable telemetry." -ForegroundColor $Colors.Info
-        exit
-    }
-    Write-Host ""
-}
-
-# =======================================================
-# VISUAL STUDIO VERSIONS DETECTION AND PROCESSING
-# =======================================================
-Write-Host "--- Checking and Disabling Visual Studio Telemetry (Existing Paths Only) ---" -ForegroundColor $Colors.Section
-
-# Visual Studio versions to check
-$vsVersions = @{
-    "14.0" = "Visual Studio 2015"
-    "15.0" = "Visual Studio 2017" 
-    "16.0" = "Visual Studio 2019"
-    "17.0" = "Visual Studio 2022"
-}
-
-# Track which versions are actually installed
-$installedVersions = @()
-
-foreach ($version in $vsVersions.Keys) {
-    $vsName = $vsVersions[$version]
-    Write-Host "`n--- Checking $vsName (version $version) ---" -ForegroundColor $Colors.Info
-    
-    $foundVersion = $false
-    
-    # Check 64-bit paths
-    if ([Environment]::Is64BitOperatingSystem) {
-        $path64 = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version\SQM"
-        Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-        Write-Host "Checking 64-bit path for " -NoNewline -ForegroundColor $Colors.White
-        Write-Host "$vsName" -ForegroundColor $Colors.Info
-        
-        $result64 = Set-RegistryValue -Path $path64 -Name "OptIn" -Value 0
-        if ($result64) {
-            $foundVersion = $true
+    # Метод 1: vswhere.exe (найнадійніший для VS 2017+)
+    $vswherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if ((Test-Path $vswherePath) -and !$detected) {
+        try {
+            $vsInstallations = & $vswherePath -all -format json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($vsInstallations) {
+                foreach ($installation in $vsInstallations) {
+                    if ($installation.installationVersion) {
+                        $installedMajorVersion = ($installation.installationVersion -split '\.')[0]
+                        $expectedMajor = ($Version -split '\.')[0]
+                        if ($installedMajorVersion -eq $expectedMajor) {
+                            $detected = $true
+                            $detectionMethod = "vswhere"
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        catch {
+            # vswhere failed, continue to other methods
         }
     }
     
-    # Check 32-bit paths
-    $path32 = "HKLM:\SOFTWARE\Microsoft\VSCommon\$version\SQM"
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "Checking 32-bit path for " -NoNewline -ForegroundColor $Colors.White
-    Write-Host "$vsName" -ForegroundColor $Colors.Info
-    
-    $result32 = Set-RegistryValue -Path $path32 -Name "OptIn" -Value 0
-    if ($result32) {
-        $foundVersion = $true
+    # Метод 2: Перевірка наявності devenv.exe
+    if (!$detected) {
+        $installPaths = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio\$Year\*\Common7\IDE\devenv.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\$Year\*\Common7\IDE\devenv.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio $Version\Common7\IDE\devenv.exe"
+        )
+        
+        foreach ($pattern in $installPaths) {
+            $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+            if ($found) {
+                $detected = $true
+                $detectionMethod = "devenv.exe"
+                break
+            }
+        }
     }
     
-    # Track if this version was found
-    if ($foundVersion) {
-        $installedVersions += $version
-        Write-Host "✓ Found $vsName installation" -ForegroundColor $Colors.Success
+    # Метод 3: Ключ реєстру з InstallDir/ProductDir
+    if (!$detected) {
+        $regCheckPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\VisualStudio\$Version\Setup\VS",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\$Version\Setup\VS",
+            "HKLM:\SOFTWARE\Microsoft\VisualStudio\$Version",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\$Version"
+        )
+        
+        foreach ($regPath in $regCheckPaths) {
+            if (Test-Path $regPath) {
+                $regProps = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
+                if ($regProps) {
+                    # Перевіряємо наявність реальних даних про встановлення
+                    if ($regProps.InstallDir -or $regProps.ProductDir -or $regProps.ShellFolder) {
+                        # Додатково перевіряємо чи шлях існує
+                        $installPath = $regProps.InstallDir
+                        if (!$installPath) { $installPath = $regProps.ProductDir }
+                        if (!$installPath) { $installPath = $regProps.ShellFolder }
+                        
+                        if ($installPath -and (Test-Path $installPath -ErrorAction SilentlyContinue)) {
+                            $detected = $true
+                            $detectionMethod = "registry (InstallDir)"
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Метод 4: Перевірка через Uninstall ключі реєстру
+    if (!$detected) {
+        $uninstallPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+        
+        foreach ($uninstallPath in $uninstallPaths) {
+            $apps = Get-ItemProperty $uninstallPath -ErrorAction SilentlyContinue | 
+            Where-Object { $_.DisplayName -like "*Visual Studio $Year*" -and $_.DisplayName -notlike "*Code*" }
+            if ($apps) {
+                $detected = $true
+                $detectionMethod = "uninstall registry"
+                break
+            }
+        }
+    }
+    
+    return @{
+        Detected = $detected
+        Method   = $detectionMethod
     }
 }
 
 # =======================================================
-# VISUAL STUDIO POLICY SETTINGS (Only if they exist)
+# MAIN SCRIPT LOGIC
+# =======================================================
+
+# Handle backup/restore operations
+if ($RestoreBackup) {
+    $null = Restore-RegistryBackup -BackupFile $BackupPath
+    Write-Host "`nRestore operation completed. Press Enter to exit..." -ForegroundColor $Colors.Info
+    $null = Read-Host
+    exit
+}
+
+if ($CreateBackup) {
+    $null = New-RegistryBackup -BackupFile $BackupPath
+    Write-Host "`nBackup created at: $BackupPath" -ForegroundColor $Colors.Info
+    Write-Host "You can restore with: .\off_telemetry_ps5.ps1 -RestoreBackup -BackupPath '$BackupPath'" -ForegroundColor $Colors.Info
+    
+    $continue = Read-Host "`nContinue with telemetry disable? (y/n)"
+    if ($continue -ne 'y' -and $continue -ne 'Y') {
+        exit
+    }
+}
+
+# =======================================================
+# DETECT INSTALLED VISUAL STUDIO VERSIONS
+# =======================================================
+Write-Host "`n--- Detecting Installed Visual Studio Versions ---" -ForegroundColor $Colors.Section
+
+$vsVersions = @{
+    "14.0" = @{ Name = "Visual Studio 2015"; Year = "2015" }
+    "15.0" = @{ Name = "Visual Studio 2017"; Year = "2017" }
+    "16.0" = @{ Name = "Visual Studio 2019"; Year = "2019" }
+    "17.0" = @{ Name = "Visual Studio 2022"; Year = "2022" }
+    "18.0" = @{ Name = "Visual Studio 2026"; Year = "2026" }
+}
+
+$installedVersions = @()
+
+foreach ($version in $vsVersions.Keys | Sort-Object) {
+    $vsInfo = $vsVersions[$version]
+    $vsName = $vsInfo.Name
+    $vsYear = $vsInfo.Year
+    
+    $result = Test-VSInstalled -Version $version -Year $vsYear
+    
+    if ($result.Detected) {
+        Write-Host "[OK] Detected: $vsName (version $version) via $($result.Method)" -ForegroundColor $Colors.Success
+        $installedVersions += $version
+    }
+    else {
+        Write-Host "[SKIP] Not installed: $vsName (version $version)" -ForegroundColor $Colors.Gray
+    }
+}
+
+if ($installedVersions.Count -eq 0) {
+    Write-Host "[INFO] No Visual Studio installations detected" -ForegroundColor $Colors.Info
+}
+else {
+    Write-Host "`n[INFO] Found $($installedVersions.Count) Visual Studio installation(s)" -ForegroundColor $Colors.Info
+}
+
+# =======================================================
+# VISUAL STUDIO TELEMETRY DISABLE (INSTALLED VERSIONS ONLY)
+# =======================================================
+Write-Host "`n--- Disabling Visual Studio Telemetry (Installed Versions Only) ---" -ForegroundColor $Colors.Section
+
+if ($installedVersions.Count -eq 0) {
+    Write-Host "[SKIP] No Visual Studio installations found, skipping telemetry configuration" -ForegroundColor $Colors.Gray
+}
+else {
+    foreach ($version in $installedVersions) {
+        $vsName = $vsVersions[$version].Name
+        Write-Host "`n--- Processing $vsName (version $version) ---" -ForegroundColor $Colors.Info
+        
+        # SQM paths - базові шляхи VSCommon
+        $regBases = @()
+        
+        # 32-bit path
+        $regBases += @{ 
+            BasePath = "HKLM:\SOFTWARE\Microsoft\VSCommon\$version"
+            SqmPath  = "HKLM:\SOFTWARE\Microsoft\VSCommon\$version\SQM"
+            Arch     = "32-bit" 
+        }
+        
+        # 64-bit path (Wow6432Node)
+        if ([Environment]::Is64BitOperatingSystem) {
+            $regBases += @{ 
+                BasePath = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version"
+                SqmPath  = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VSCommon\$version\SQM"
+                Arch     = "64-bit (Wow6432Node)" 
+            }
+        }
+        
+        foreach ($regBase in $regBases) {
+            $basePath = $regBase.BasePath
+            $sqmPath = $regBase.SqmPath
+            
+            # Перевіряємо чи існує базовий шлях VSCommon\version
+            if (Test-Path $basePath) {
+                Write-Host "[INFO] Found $($regBase.Arch) registry path for $vsName" -ForegroundColor $Colors.Info
+                # Створюємо SQM підключ тільки якщо базовий шлях існує
+                $null = Set-SafeRegistryValue -Path $sqmPath -Name "OptIn" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            else {
+                Write-Host "[SKIP] $($regBase.Arch) VSCommon path not found for $vsName" -ForegroundColor $Colors.Gray
+            }
+        }
+        
+        # User settings - тільки якщо існує базовий шлях
+        $userBasePath = "HKCU:\Software\Microsoft\VisualStudio\$version"
+        if (Test-Path $userBasePath) {
+            $null = Set-SafeRegistryValue -Path "$userBasePath\General" -Name "EnableSQM" -Value 0 -Type 'DWORD' -CreatePath
+        }
+        else {
+            Write-Host "[SKIP] User registry path not found for $vsName" -ForegroundColor $Colors.Gray
+        }
+    }
+}
+
+# =======================================================
+# VISUAL STUDIO POLICY SETTINGS
 # =======================================================
 Write-Host "`n--- Checking Visual Studio Policy Settings ---" -ForegroundColor $Colors.Section
 
-# Base policy paths
-$policyBase = "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio"
-$feedbackPath = "$policyBase\Feedback"
-$sqmPath = "$policyBase\SQM"
-$telemetryPath = "HKCU:\Software\Microsoft\VisualStudio\Telemetry"
-
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "Checking Visual Studio Policy paths..." -ForegroundColor $Colors.White
-
-# Feedback settings
-Set-RegistryValue -Path $feedbackPath -Name "DisableFeedbackDialog" -Value 1
-Set-RegistryValue -Path $feedbackPath -Name "DisableEmailInput" -Value 1
-Set-RegistryValue -Path $feedbackPath -Name "DisableScreenshotCapture" -Value 1
-
-# SQM and telemetry settings
-Set-RegistryValue -Path $sqmPath -Name "OptIn" -Value 0
-Set-RegistryValue -Path $telemetryPath -Name "TurnOffSwitch" -Value 1
-
-# =======================================================
-# ADDITIONAL VISUAL STUDIO REGISTRY PATHS
-# =======================================================
-Write-Host "`n--- Checking Additional Visual Studio Registry Paths ---" -ForegroundColor $Colors.Section
-
-# Additional paths that might exist
-$additionalPaths = @(
-    "HKCU:\Software\Microsoft\VisualStudio\14.0\General",
-    "HKCU:\Software\Microsoft\VisualStudio\15.0\General", 
-    "HKCU:\Software\Microsoft\VisualStudio\16.0\General",
-    "HKCU:\Software\Microsoft\VisualStudio\17.0\General"
-)
-
-foreach ($path in $additionalPaths) {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-	Write-Host "Checking additional path..." -ForegroundColor $Colors.White
-    Set-RegistryValue -Path $path -Name "EnableSQM" -Value 0
+# Only create policy paths if at least one VS version is installed
+if ($installedVersions.Count -gt 0) {
+    Write-Host "[INFO] Visual Studio detected, configuring policies..." -ForegroundColor $Colors.Info
+    
+    # Policy paths (create only if VS is installed)
+    $policyPaths = @{
+        "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback" = @{
+            "DisableFeedbackDialog"    = 1
+            "DisableEmailInput"        = 1
+            "DisableScreenshotCapture" = 1
+        }
+        "HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM"      = @{
+            "OptIn" = 0
+        }
+        "HKCU:\Software\Microsoft\VisualStudio\Telemetry"         = @{
+            "TurnOffSwitch" = 1
+        }
+    }
+    
+    foreach ($path in $policyPaths.Keys) {
+        $settings = $policyPaths[$path]
+        foreach ($setting in $settings.GetEnumerator()) {
+            $null = Set-SafeRegistryValue -Path $path -Name $setting.Key -Value $setting.Value -Type 'DWORD' -CreatePath
+        }
+    }
+}
+else {
+    Write-Host "[SKIP] No Visual Studio detected, skipping policy configuration" -ForegroundColor $Colors.Gray
 }
 
-# Check Experience Improvement Program paths
+# =======================================================
+# EXPERIENCE IMPROVEMENT PROGRAM
+# =======================================================
+Write-Host "`n--- Disabling Customer Experience Improvement Program ---" -ForegroundColor $Colors.Section
+
 $experiencePaths = @(
     "HKLM:\SOFTWARE\Microsoft\SQMClient",
     "HKLM:\SOFTWARE\Wow6432Node\Microsoft\SQMClient"
 )
 
 foreach ($path in $experiencePaths) {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-	Write-Host "Checking SQM Client path..." -ForegroundColor $Colors.White
-    Set-RegistryValue -Path $path -Name "CEIPEnable" -Value 0
+    if (Test-Path $path) {
+        $null = Set-SafeRegistryValue -Path $path -Name "CEIPEnable" -Value 0 -Type 'DWORD'
+    }
+    else {
+        Write-Host "[SKIP] SQMClient path not found: $path" -ForegroundColor $Colors.Gray
+    }
 }
 
 # =======================================================
 # TELEMETRY DIRECTORIES CLEANUP
 # =======================================================
-Write-Host "`n--- Checking Telemetry Directories ---" -ForegroundColor $Colors.Section
+Write-Host "`n--- Cleaning Telemetry Directories ---" -ForegroundColor $Colors.Section
 
 $telemetryDirs = @(
     "$env:APPDATA\vstelemetry",
@@ -561,11 +633,8 @@ foreach ($dir in $telemetryDirs) {
 # =======================================================
 Write-Host "`n--- Disabling .NET and NuGet Telemetry ---" -ForegroundColor $Colors.Section
 
-# Check and set .NET CLI telemetry
-Set-EnvironmentVariableIfNeeded -Name 'DOTNET_CLI_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
-
-# Check and set NuGet telemetry
-Set-EnvironmentVariableIfNeeded -Name 'NUGET_TELEMETRY_OPTOUT' -Value 'true' -Target 'User'
+$null = Set-SafeEnvironmentVariable -Name 'DOTNET_CLI_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+$null = Set-SafeEnvironmentVariable -Name 'NUGET_TELEMETRY_OPTOUT' -Value 'true' -Target 'User'
 
 # =======================================================
 # VISUAL STUDIO STANDARD COLLECTOR SERVICE
@@ -576,35 +645,40 @@ $serviceName = 'VSStandardCollectorService150'
 $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
 if ($service) {
-    Write-Host "→ Found service: $serviceName" -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Found service: $serviceName" -ForegroundColor $Colors.Info
     
-    # Check and stop service if running
+    # Stop service if running
     if ($service.Status -eq 'Running') {
         try {
             Stop-Service -Name $serviceName -Force -ErrorAction Stop
-            Write-Host "✓ Stopped $serviceName" -ForegroundColor $Colors.Success
+            Write-Host "[OK] Stopped $serviceName" -ForegroundColor $Colors.Success
         }
         catch {
-            Write-Host "✗ Could not stop $serviceName : $_" -ForegroundColor $Colors.Error
+            Write-Host "[ERROR] Could not stop $serviceName : $_" -ForegroundColor $Colors.Error
         }
-    } else {
-        Write-Host "→ Service $serviceName is already stopped (Status: $($service.Status))" -ForegroundColor $Colors.Info
+    }
+    else {
+        Write-Host "[INFO] Service $serviceName already stopped (Status: $($service.Status))" -ForegroundColor $Colors.Info
     }
     
-    # Check and disable service
+    # Disable service
     if ($service.StartType -eq 'Disabled') {
-        Write-Host "✓ $serviceName already disabled" -ForegroundColor $Colors.Success
-    } else {
+        Write-Host "[OK] $serviceName already disabled" -ForegroundColor $Colors.Success
+    }
+    else {
         try {
             Set-Service -Name $serviceName -StartupType Disabled -Confirm:$false -ErrorAction Stop
-            Write-Host "✓ Disabled $serviceName" -ForegroundColor $Colors.Success
+            Write-Host "[OK] Disabled $serviceName" -ForegroundColor $Colors.Success
         }
         catch {
-            Write-Host "✗ Could not disable $serviceName : $_" -ForegroundColor $Colors.Error
+            Write-Host "[ERROR] Could not disable $serviceName : $_" -ForegroundColor $Colors.Error
         }
     }
-} else {
-    Write-Host "→ $serviceName not found (already removed or not installed)" -ForegroundColor $Colors.Gray
+    $serviceProcessed = $true
+}
+else {
+    Write-Host "[SKIP] $serviceName not found (not installed)" -ForegroundColor $Colors.Gray
+    $serviceProcessed = $false
 }
 
 # =======================================================
@@ -617,32 +691,34 @@ $vscodeUserDir = "$env:APPDATA\Code\User"
 $vscodeDetected = $false
 
 if (!(Test-Path "$env:APPDATA\Code")) {
-    Write-Host "→ Visual Studio Code not detected" -ForegroundColor $Colors.Gray
-} else {
-    Write-Host "→ Visual Studio Code detected" -ForegroundColor $Colors.Info
+    Write-Host "[SKIP] Visual Studio Code not detected" -ForegroundColor $Colors.Gray
+}
+else {
+    Write-Host "[INFO] Visual Studio Code detected" -ForegroundColor $Colors.Info
     $vscodeDetected = $true
     
     # Create User directory if needed
     if (!(Test-Path $vscodeUserDir)) {
         try {
             $null = New-Item -Path $vscodeUserDir -ItemType Directory -Force
-            Write-Host "→ Created VS Code User directory" -ForegroundColor $Colors.Info
-        } catch {
-            Write-Host "✗ Failed to create VS Code User directory: $_" -ForegroundColor $Colors.Error
+            Write-Host "[INFO] Created VS Code User directory" -ForegroundColor $Colors.Info
+        }
+        catch {
+            Write-Host "[ERROR] Failed to create VS Code User directory: $_" -ForegroundColor $Colors.Error
         }
     }
 
     # Privacy settings
     $privacyConfig = @{
-        "telemetry.enableTelemetry" = $false
-        "telemetry.enableCrashReporter" = $false
-        "workbench.enableExperiments" = $false
-        "update.mode" = "manual"
-        "update.showReleaseNotes" = $false
-        "extensions.autoCheckUpdates" = $false
+        "telemetry.enableTelemetry"                  = $false
+        "telemetry.enableCrashReporter"              = $false
+        "workbench.enableExperiments"                = $false
+        "update.mode"                                = "manual"
+        "update.showReleaseNotes"                    = $false
+        "extensions.autoCheckUpdates"                = $false
         "extensions.showRecommendationsOnlyOnDemand" = $true
-        "git.autofetch" = $false
-        "npm.fetchOnlinePackageInfo" = $false
+        "git.autofetch"                              = $false
+        "npm.fetchOnlinePackageInfo"                 = $false
     }
 
     try {
@@ -652,17 +728,15 @@ if (!(Test-Path "$env:APPDATA\Code")) {
             $content = Get-Content $vscodeSettings -Raw -ErrorAction SilentlyContinue
             if ($content -and $content.Trim()) {
                 try {
-                    # Use PowerShell's built-in JSON cmdlets
                     $settingsObj = $content | ConvertFrom-Json
-                    # Convert PSCustomObject to hashtable for easier manipulation
                     $settings = @{}
                     $settingsObj.PSObject.Properties | ForEach-Object {
                         $settings[$_.Name] = $_.Value
                     }
-                    Write-Host "→ Found existing VS Code settings file" -ForegroundColor $Colors.Info
+                    Write-Host "[INFO] Found existing VS Code settings file" -ForegroundColor $Colors.Info
                 }
                 catch {
-                    Write-Host "→ Could not parse existing settings, creating new ones" -ForegroundColor $Colors.Warning
+                    Write-Host "[WARNING] Could not parse existing settings, creating new ones" -ForegroundColor $Colors.Warning
                     $settings = @{}
                 }
             }
@@ -673,17 +747,11 @@ if (!(Test-Path "$env:APPDATA\Code")) {
         foreach ($key in $privacyConfig.Keys) {
             $value = $privacyConfig[$key]
             if ($settings.ContainsKey($key) -and $settings[$key] -eq $value) {
-                Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-                Write-Host "$key " -NoNewline -ForegroundColor $Colors.Info
-                Write-Host "already set to " -NoNewline -ForegroundColor $Colors.White
-                Write-Host "$value" -ForegroundColor $Colors.Success
-            } else {
+                Write-Host "[OK] $key already set to $value" -ForegroundColor $Colors.Success
+            }
+            else {
                 $settings[$key] = $value
-                Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-                Write-Host "Updated " -NoNewline -ForegroundColor $Colors.White
-                Write-Host "$key " -NoNewline -ForegroundColor $Colors.Info
-                Write-Host "to " -NoNewline -ForegroundColor $Colors.White
-                Write-Host "$value" -ForegroundColor $Colors.Success
+                Write-Host "[OK] Updated $key to $value" -ForegroundColor $Colors.Success
                 $changesMade = $true
             }
         }
@@ -692,13 +760,14 @@ if (!(Test-Path "$env:APPDATA\Code")) {
         if ($changesMade -or !(Test-Path $vscodeSettings)) {
             $json = $settings | ConvertTo-Json -Depth 10
             $json | Out-File -FilePath $vscodeSettings -Encoding UTF8
-            Write-Host "✓ Saved VS Code privacy settings" -ForegroundColor $Colors.Success
-        } else {
-            Write-Host "→ No changes needed for VS Code settings" -ForegroundColor $Colors.Info
+            Write-Host "[OK] Saved VS Code privacy settings" -ForegroundColor $Colors.Success
+        }
+        else {
+            Write-Host "[INFO] No changes needed for VS Code settings" -ForegroundColor $Colors.Info
         }
     }
     catch {
-        Write-Host "✗ Failed to update VS Code settings: $_" -ForegroundColor $Colors.Error
+        Write-Host "[ERROR] Failed to update VS Code settings: $_" -ForegroundColor $Colors.Error
     }
 }
 
@@ -711,13 +780,13 @@ $backgroundDownloadProcessed = $false
 
 # Check if any Visual Studio versions are installed before proceeding
 if ($installedVersions.Count -gt 0) {
-    Write-Host "→ Visual Studio detected, processing BackgroundDownload settings..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Visual Studio detected, processing BackgroundDownload settings..." -ForegroundColor $Colors.Info
     
     # 1. Disable scheduled tasks
     $tasksProcessed = Disable-BackgroundDownloadTasks
     
     # 2. Set registry keys to disable background downloads
-    Write-Host "→ Setting registry keys to disable background downloads..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Setting registry keys to disable background downloads..." -ForegroundColor $Colors.Info
     
     $regPaths = @(
         "HKLM:\SOFTWARE\Microsoft\VisualStudio\Setup",
@@ -733,30 +802,24 @@ if ($installedVersions.Count -gt 0) {
         }
         
         if ($shouldProcess) {
-            # Create the registry path if it doesn't exist (since we're configuring VS Setup)
-            if (!(Test-Path $regPath)) {
-                try {
-                    $null = New-Item -Path $regPath -Force -ErrorAction Stop
-                    Write-Host "→ Created registry path: $regPath" -ForegroundColor $Colors.Info
+            # Перевіряємо чи існує базовий шлях Setup
+            if (Test-Path $regPath) {
+                # Set the registry values
+                $regSettings = @{
+                    "BackgroundDownloadDisabled" = 1
+                    "DisableBackgroundDownloads" = 1
+                    "DisableAutomaticUpdates"    = 1
                 }
-                catch {
-                    Write-Host "✗ Could not create registry path $regPath : $_" -ForegroundColor $Colors.Error
-                    continue
+                
+                foreach ($setting in $regSettings.GetEnumerator()) {
+                    $success = Set-SafeRegistryValue -Path $regPath -Name $setting.Key -Value $setting.Value -Type 'DWORD'
+                    if ($success) {
+                        $regKeysSet = $true
+                    }
                 }
             }
-            
-            # Set the registry values
-            $regSettings = @{
-                "BackgroundDownloadDisabled" = 1
-                "DisableBackgroundDownloads" = 1
-                "DisableAutomaticUpdates" = 1
-            }
-            
-            foreach ($setting in $regSettings.GetEnumerator()) {
-                $success = Set-RegistryValue -Path $regPath -Name $setting.Key -Value $setting.Value -Type 'DWord'
-                if ($success) {
-                    $regKeysSet = $true
-                }
+            else {
+                Write-Host "[SKIP] Setup registry path not found: $regPath" -ForegroundColor $Colors.Gray
             }
         }
     }
@@ -768,7 +831,7 @@ if ($installedVersions.Count -gt 0) {
     $tempFoldersProcessed = Remove-BackgroundDownloadTempFolders
     
     # 5. Verification
-    Write-Host "→ Verifying BackgroundDownload configuration..." -ForegroundColor $Colors.Info
+    Write-Host "[INFO] Verifying BackgroundDownload configuration..." -ForegroundColor $Colors.Info
     
     try {
         $verificationSuccess = $false
@@ -778,46 +841,58 @@ if ($installedVersions.Count -gt 0) {
             if (Test-Path $regPath) {
                 $regValues = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
                 if ($regValues -and $regValues.BackgroundDownloadDisabled -eq 1) {
-                    Write-Host "✓ Registry verification: BackgroundDownloadDisabled = 1 in $regPath" -ForegroundColor $Colors.Success
+                    Write-Host "[OK] Registry verification: BackgroundDownloadDisabled = 1 in $regPath" -ForegroundColor $Colors.Success
                     $verificationSuccess = $true
                 }
             }
         }
         
         if (!$verificationSuccess) {
-            Write-Host "→ Could not verify registry settings" -ForegroundColor $Colors.Warning
+            Write-Host "[WARNING] Could not verify registry settings" -ForegroundColor $Colors.Warning
         }
         
-    } catch {
-        Write-Host "→ Verification error: $_" -ForegroundColor $Colors.Warning
+    }
+    catch {
+        Write-Host "[WARNING] Verification error: $_" -ForegroundColor $Colors.Warning
     }
     
     # Set processed flag if any operation was successful
     $backgroundDownloadProcessed = $tasksProcessed -or $regKeysSet -or $processesProcessed -or $tempFoldersProcessed
     
-} else {
-    Write-Host "→ No Visual Studio installations detected, skipping BackgroundDownload configuration" -ForegroundColor $Colors.Gray
+}
+else {
+    Write-Host "[SKIP] No Visual Studio installations detected, skipping BackgroundDownload configuration" -ForegroundColor $Colors.Gray
 }
 
 # =======================================================
-# ADDITIONAL POWERSHELL 7 TELEMETRY CHECKS
+# POWERSHELL TELEMETRY [off] FOR PS 7.x 
 # =======================================================
-Write-Host "`n--- PowerShell 7 Telemetry Checks ---" -ForegroundColor $Colors.Section
+Write-Host "`n--- Disabling PowerShell Telemetry ---" -ForegroundColor $Colors.Section
 
-# Check if PowerShell telemetry is disabled
+# Check Windows version
+$powershellTelemetryProcessed = $false
 try {
-    $psDataCollection = [Microsoft.PowerShell.Telemetry.ApplicationInsightsTelemetry]::Enabled -eq $false
-    if ($psDataCollection) {
-        Write-Host "✓ PowerShell telemetry already disabled" -ForegroundColor $Colors.Success
-    } else {
-        Write-Host "→ PowerShell telemetry status:" -ForegroundColor $Colors.Info
+    $osVersion = [System.Environment]::OSVersion.Version
+    $windowsVersion = "$($osVersion.Major).$($osVersion.Minor)"
+    
+    $isWindows8Plus = ($osVersion.Major -gt 6) -or ($osVersion.Major -eq 6 -and $osVersion.Minor -ge 2)
+    
+    if ($isWindows8Plus) {
+        Write-Host "[INFO] Windows version $windowsVersion detected (Windows 8+)" -ForegroundColor $Colors.Info
+        $null = Set-SafeEnvironmentVariable -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        $powershellTelemetryProcessed = $true
     }
-} catch {
-    Write-Host "→ Could not check PowerShell telemetry status" -ForegroundColor $Colors.Gray
+    else {
+        Write-Host "[SKIP] Windows version $windowsVersion detected (Windows 7), skipping PowerShell telemetry disable" -ForegroundColor $Colors.Gray
+        Write-Host "[INFO] PowerShell telemetry disable is only applied on Windows 8 and newer" -ForegroundColor $Colors.Info
+    }
 }
-
-# Check PowerShell environment variables
-Set-EnvironmentVariableIfNeeded -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+catch {
+    Write-Host "[ERROR] Could not detect Windows version: $_" -ForegroundColor $Colors.Error
+    Write-Host "[INFO] Attempting to disable PowerShell telemetry anyway..." -ForegroundColor $Colors.Info
+    $null = Set-SafeEnvironmentVariable -Name 'POWERSHELL_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+    $powershellTelemetryProcessed = $true
+}
 
 # =======================================================
 # SUMMARY
@@ -826,115 +901,95 @@ Write-Host "`n========================================" -ForegroundColor $Colors
 Write-Host "TELEMETRY DISABLE COMPLETE" -ForegroundColor $Colors.Title
 Write-Host "========================================" -ForegroundColor $Colors.Title
 
-Write-Host "`nProcessed telemetry settings for:" -ForegroundColor $Colors.White
+Write-Host "`nProcessed telemetry settings for:" -ForegroundColor White
 
 # Visual Studio versions with status colors
 if ($installedVersions.Count -gt 0) {
-    foreach ($version in $installedVersions) {
-        Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-        Write-Host "$($vsVersions[$version]) " -NoNewline -ForegroundColor $Colors.Info
-        Write-Host "(detected and processed)" -ForegroundColor $Colors.Success
+    foreach ($version in $installedVersions | Sort-Object) {
+        Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+        Write-Host "$($vsVersions[$version].Name) (detected)" -ForegroundColor $Colors.Success
     }
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
+    
+    # Show skipped versions
+    $skippedVersions = $vsVersions.Keys | Where-Object { $_ -notin $installedVersions } | Sort-Object
+    foreach ($version in $skippedVersions) {
+        Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+        Write-Host "$($vsVersions[$version].Name) (not installed)" -ForegroundColor $Colors.Gray
+    }
+}
+else {
+    Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
     Write-Host "No Visual Studio versions detected" -ForegroundColor $Colors.Gray
 }
 
 # Visual Studio Code with status colors
 if ($vscodeDetected) {
-    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-    Write-Host "Visual Studio Code " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(detected and configured)" -ForegroundColor $Colors.Success
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
-    Write-Host "Visual Studio Code " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(not found)" -ForegroundColor $Colors.Gray
+    Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+    Write-Host "Visual Studio Code (detected)" -ForegroundColor $Colors.Success
+}
+else {
+    Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+    Write-Host "Visual Studio Code (not found)" -ForegroundColor $Colors.Gray
 }
 
-# .NET CLI status
-Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-Write-Host ".NET CLI " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "(telemetry disabled)" -ForegroundColor $Colors.Success
+# Other components with status indicators
+Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+Write-Host ".NET CLI" -ForegroundColor $Colors.Success
 
-# NuGet status
-Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-Write-Host "NuGet " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "(telemetry disabled)" -ForegroundColor $Colors.Success
+Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+Write-Host "NuGet" -ForegroundColor $Colors.Success
 
 # VS Standard Collector Service status
-if ($null -ne $service) {
-    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-    Write-Host "VS Standard Collector Service " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(processed)" -ForegroundColor $Colors.Success
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
-    Write-Host "VS Standard Collector Service " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(not found)" -ForegroundColor $Colors.Gray
+if ($serviceProcessed) {
+    Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+    Write-Host "VS Standard Collector Service (processed)" -ForegroundColor $Colors.Success
 }
-
-# PowerShell 7 status
-$psTelemetryOptOut = [Environment]::GetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', 'User')
-if ($psTelemetryOptOut -eq '1') {
-    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-    Write-Host "PowerShell 7 telemetry " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(opt-out configured via environment variable)" -ForegroundColor $Colors.Success
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
-    Write-Host "PowerShell 7 telemetry " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(opt-out not configured; current value: $($psTelemetryOptOut ?? 'not set'))" -ForegroundColor $Colors.Gray
+else {
+    Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+    Write-Host "VS Standard Collector Service (not found)" -ForegroundColor $Colors.Gray
 }
 
 # Visual Studio Background Download status
 if ($backgroundDownloadProcessed) {
-    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-    Write-Host "Visual Studio Background Download " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(disabled)" -ForegroundColor $Colors.Success
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
-    Write-Host "Visual Studio Background Download " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(not processed)" -ForegroundColor $Colors.Gray
+    Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+    Write-Host "Visual Studio Background Download (disabled)" -ForegroundColor $Colors.Success
+}
+else {
+    Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+    Write-Host "Visual Studio Background Download (not processed)" -ForegroundColor $Colors.Gray
 }
 
-# Customer Experience Improvement Program status
-$experienceDisabled = $true
-foreach ($path in $experiencePaths) {
-    $value = Get-ItemProperty -Path $path -Name "CEIPEnable" -ErrorAction SilentlyContinue
-    if ($value -and $value.CEIPEnable -ne 0) {
-        $experienceDisabled = $false
-        break
-    }
+# PowerShell Telemetry status
+if ($powershellTelemetryProcessed) {
+    Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+    Write-Host "PowerShell 7 Telemetry (disabled)" -ForegroundColor $Colors.Success
 }
-if ($experienceDisabled) {
-    Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-    Write-Host "Customer Experience Improvement Program " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(disabled)" -ForegroundColor $Colors.Success
-} else {
-    Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray
-    Write-Host "Customer Experience Improvement Program " -NoNewline -ForegroundColor $Colors.Info
-    Write-Host "(not fully disabled)" -ForegroundColor $Colors.Gray
+else {
+    Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray
+    Write-Host "PowerShell 7 Telemetry (Windows 7 - not supported)" -ForegroundColor $Colors.Gray
 }
 
-# Telemetry Directories Cleanup status
-Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success
-Write-Host "Telemetry Directories Cleanup " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "(processed)" -ForegroundColor $Colors.Success
+Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+Write-Host "Customer Experience Improvement Program" -ForegroundColor $Colors.Success
+
+Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success
+Write-Host "Telemetry Directories Cleanup" -ForegroundColor $Colors.Success
 
 # =======================================================
 # ADDITIONAL FEATURES AND ENVIRONMENT VARIABLES
 # =======================================================
 Write-Host "`n--- Optional: Additional Features and Environment Variables ---" -ForegroundColor $Colors.Section
 
-# Only offer extra tweaks if at least one VS version is installed
 if ($installedVersions.Count -eq 0) {
-    Write-Host "→ No Visual Studio installations detected – skipping additional configuration" -ForegroundColor $Colors.Gray
+    Write-Host "[SKIP] No Visual Studio installations detected, skipping additional configuration" -ForegroundColor $Colors.Gray
 }
 else {
     Write-Host "This will perform additional configuration:" -ForegroundColor $Colors.Info
-    Write-Host "• Disable Visual Studio Settings Synchronization" -ForegroundColor $Colors.Info
-    Write-Host "• Disable Live Share" -ForegroundColor $Colors.Info
-    Write-Host "• Disable IntelliCode" -ForegroundColor $Colors.Info
-    Write-Host "• Disable CodeLens" -ForegroundColor $Colors.Info
-    Write-Host "• Set additional environment variables:" -ForegroundColor $Colors.Info
+    Write-Host "> Disable Visual Studio Settings Synchronization" -ForegroundColor $Colors.Info
+    Write-Host "> Disable Live Share" -ForegroundColor $Colors.Info
+    Write-Host "> Disable IntelliCode" -ForegroundColor $Colors.Info
+    Write-Host "> Disable CodeLens" -ForegroundColor $Colors.Info
+    Write-Host "> Set additional environment variables:" -ForegroundColor $Colors.Info
     Write-Host "  - INTELLICODE_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
     Write-Host "  - LIVESHARE_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
     Write-Host "  - VSSDK_TELEMETRY_OPTOUT" -ForegroundColor $Colors.Info
@@ -942,103 +997,57 @@ else {
     $enableAdditional = Read-Host "`nEnable additional configuration? (y/n)"
 
     if ($enableAdditional -match '^y(es)?$') {
-
-        # === Disabling Additional Visual Studio Features ===
         Write-Host "`n--- Disabling Additional Visual Studio Features ---" -ForegroundColor $Colors.Section
 
         foreach ($version in $installedVersions) {
-            $vsName = $vsVersions[$version]
+            $vsName = $vsVersions[$version].Name
             Write-Host "`n--- Processing Additional Features for $vsName (version $version) ---" -ForegroundColor $Colors.Info
 
-            # Settings Sync
-            $settingsPaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\Settings",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\Settings"
-            )
-            foreach ($path in $settingsPaths) {
-                Set-RegistryValue -Path $path -Name "SyncSettings"      -Value 0
-                Set-RegistryValue -Path $path -Name "EnableRoaming"     -Value 0
-                Set-RegistryValue -Path $path -Name "EnableSync"        -Value 0
-                Set-RegistryValue -Path $path -Name "DisableSync"       -Value 1
-            }
+            # Перевіряємо базовий шлях користувача
+            $userBasePath = "HKCU:\Software\Microsoft\VisualStudio\$version"
+            
+            if (Test-Path $userBasePath) {
+                # Settings Sync
+                $null = Set-SafeRegistryValue -Path "$userBasePath\Settings" -Name "SyncSettings" -Value 0 -Type 'DWORD' -CreatePath
 
-            # Live Share
-            $liveSharePaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\LiveShare",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\LiveShare"
-            )
-            foreach ($path in $liveSharePaths) {
-                Set-RegistryValue -Path $path -Name "Enabled"           -Value 0
-                Set-RegistryValue -Path $path -Name "EnableTelemetry"   -Value 0
-                Set-RegistryValue -Path $path -Name "DisableTelemetry"  -Value 1
-                Set-RegistryValue -Path $path -Name "OptedIn"           -Value 0
-            }
+                # Live Share
+                $null = Set-SafeRegistryValue -Path "$userBasePath\LiveShare" -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
 
-            # IntelliCode
-            $intelliCodePaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliCode",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\IntelliSense\IntelliCode",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\IntelliCode"
-            )
-            foreach ($path in $intelliCodePaths) {
-                Set-RegistryValue -Path $path -Name "DisableTelemetry"  -Value 1
-                Set-RegistryValue -Path $path -Name "EnableTelemetry"   -Value 0
-                Set-RegistryValue -Path $path -Name "OptedIn"           -Value 0
-                Set-RegistryValue -Path $path -Name "Enabled"           -Value 0
-                Set-RegistryValue -Path $path -Name "ModelDownloadEnabled" -Value 0
-            }
+                # IntelliCode
+                $null = Set-SafeRegistryValue -Path "$userBasePath\IntelliCode" -Name "EnableTelemetry" -Value 0 -Type 'DWORD' -CreatePath
 
-            # CodeLens
-            $codeLensPaths = @(
-                "HKCU:\Software\Microsoft\VisualStudio\$version\CodeLens",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\TextEditor\CodeLens",
-                "HKCU:\Software\Microsoft\VisualStudio\$version\ApplicationPrivateSettings\Microsoft\VisualStudio\CodeLens"
-            )
-            foreach ($path in $codeLensPaths) {
-                Set-RegistryValue -Path $path -Name "Disabled"              -Value 1
-                Set-RegistryValue -Path $path -Name "ShowAuthorCodeLens"    -Value 0
-                Set-RegistryValue -Path $path -Name "ShowReferencesCodeLens" -Value 0
-                Set-RegistryValue -Path $path -Name "ShowTestCodeLens"      -Value 0
-                Set-RegistryValue -Path $path -Name "Enabled"               -Value 0
+                # CodeLens
+                $null = Set-SafeRegistryValue -Path "$userBasePath\CodeLens" -Name "Enabled" -Value 0 -Type 'DWORD' -CreatePath
+            }
+            else {
+                Write-Host "[SKIP] User registry path not found for $vsName, skipping additional features" -ForegroundColor $Colors.Gray
             }
         }
 
-        # Additional environment variables
+        # Environment variables
         Write-Host "`n--- Setting Additional Environment Variables ---" -ForegroundColor $Colors.Section
-        Set-EnvironmentVariableIfNeeded -Name 'INTELLICODE_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
-        Set-EnvironmentVariableIfNeeded -Name 'LIVESHARE_TELEMETRY_OPTOUT'   -Value '1' -Target 'User'
-        Set-EnvironmentVariableIfNeeded -Name 'VSSDK_TELEMETRY_OPTOUT'       -Value '1' -Target 'User'
+        $null = Set-SafeEnvironmentVariable -Name 'INTELLICODE_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        $null = Set-SafeEnvironmentVariable -Name 'LIVESHARE_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
+        $null = Set-SafeEnvironmentVariable -Name 'VSSDK_TELEMETRY_OPTOUT' -Value '1' -Target 'User'
 
-        Write-Host "`n✓ Additional configuration completed" -ForegroundColor $Colors.Success
+        Write-Host "`n[OK] Additional configuration completed" -ForegroundColor $Colors.Success
     }
     else {
-        Write-Host "→ Skipping additional configuration" -ForegroundColor $Colors.Info
+        Write-Host "[SKIP] Skipping additional configuration" -ForegroundColor $Colors.Info
     }
 }
 
-Write-Host "`nLegend:" -ForegroundColor $Colors.White
-Write-Host "✓ " -NoNewline -ForegroundColor $Colors.Success; Write-Host "Action completed successfully" -ForegroundColor $Colors.Gray
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info; Write-Host "Information or preparatory action" -ForegroundColor $Colors.Gray
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Gray; Write-Host "Component not found or not processed" -ForegroundColor $Colors.Gray
-Write-Host "✗ " -NoNewline -ForegroundColor $Colors.Error; Write-Host "Error occurred" -ForegroundColor $Colors.Gray
-
-Write-Host "`nUsage Examples:" -ForegroundColor $Colors.White
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "Create backup first: " -NoNewline -ForegroundColor $Colors.White
-Write-Host ".\off_telemetry_ps7.ps1 -CreateBackup" -ForegroundColor $Colors.Info
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "Restore from backup: " -NoNewline -ForegroundColor $Colors.White
-Write-Host ".\off_telemetry_ps7.ps1 -RestoreBackup -BackupPath 'path\to\backup.reg'" -ForegroundColor $Colors.Info
-Write-Host "→ " -NoNewline -ForegroundColor $Colors.Info
-Write-Host "Run without backup: " -NoNewline -ForegroundColor $Colors.White
-Write-Host ".\off_telemetry_ps7.ps1" -ForegroundColor $Colors.Info
+Write-Host "`nLegend:" -ForegroundColor $Colors.Gray
+Write-Host "[OK] " -NoNewline -ForegroundColor $Colors.Success; Write-Host "Action completed successfully"
+Write-Host "[INFO] " -NoNewline -ForegroundColor $Colors.Info; Write-Host "Information or preparatory action"
+Write-Host "[SKIP] " -NoNewline -ForegroundColor $Colors.Gray; Write-Host "Component not found or skipped"
+Write-Host "[ERROR] " -NoNewline -ForegroundColor $Colors.Error; Write-Host "Error occurred"
+Write-Host "[WARNING] " -NoNewline -ForegroundColor $Colors.Warning; Write-Host "Warning message"
 
 if (!$CreateBackup) {
-    Write-Host "`n⚠ " -NoNewline -ForegroundColor $Colors.Warning
-    Write-Host "Tip: Run with -CreateBackup parameter to create registry backup first" -ForegroundColor $Colors.Warning
+    Write-Host "`nTip: Run with -CreateBackup parameter to create registry backup first" -ForegroundColor $Colors.Warning
 }
 
-Write-Host "`n⚠ " -NoNewline -ForegroundColor $Colors.Warning
-Write-Host "Restart may be required for all changes to take effect." -ForegroundColor $Colors.Warning
-Write-Host "`nPress Enter to exit..." -ForegroundColor $Colors.White
+Write-Host "`nRestart may be required for all changes to take effect." -ForegroundColor $Colors.Warning
+Write-Host "Press Enter to exit..." -ForegroundColor $Colors.Gray
 $null = Read-Host

@@ -160,7 +160,7 @@ echo  - Script: !SCRIPT_TYPE!
 echo  - Location: !PS_SCRIPT!
 echo.
 echo This will disable telemetry for:
-echo  - Visual Studio 2015-2022
+echo  - Visual Studio 2015-2026
 echo  - Visual Studio Code  
 echo  - .NET CLI
 echo  - NuGet
